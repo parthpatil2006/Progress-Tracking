@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Progress Tracker - Official Download</title>
+  <link rel="stylesheet" href="css/main.css">
+  <style>
+    body {
+      background: #0F1117;
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+      padding: 20px;
+      text-align: center;
+      overflow-y: auto;
+    }
+    .hero-logo {
+      width: 120px;
+      height: 120px;
+      border-radius: 24px;
+      margin-bottom: 24px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    }
+    .hero-title {
+      font-size: 32px;
+      font-weight: 800;
+      margin-bottom: 12px;
+    }
+    .hero-tagline {
+      font-size: 16px;
+      color: #8A8FA8;
+      max-width: 400px;
+      margin-bottom: 40px;
+      line-height: 1.5;
+    }
+    .dl-card {
+      background: #1A1D27;
+      border: 1px solid #2A2D3E;
+      border-radius: 20px;
+      padding: 24px;
+      width: 100%;
+      max-width: 400px;
+      margin-bottom: 20px;
+    }
+    .btn-dl {
+      background: #4F8EF7;
+      color: #fff;
+      padding: 16px 32px;
+      border-radius: 12px;
+      font-size: 18px;
+      font-weight: 700;
+      text-decoration: none;
+      display: inline-block;
+      width: 100%;
+      margin-bottom: 16px;
+      box-shadow: 0 4px 15px rgba(79, 142, 247, 0.4);
+    }
+    .instruction {
+      font-size: 14px;
+      color: #8A8FA8;
+      text-align: left;
+      margin-top: 16px;
+    }
+    .instruction ol {
+      padding-left: 20px;
+      margin-top: 8px;
+    }
+    .instruction li {
+      margin-bottom: 8px;
+    }
+    .back-btn {
+      color: #8A8FA8;
+      font-size: 14px;
+      margin-top: 20px;
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body class="dark-mode">
+  <img src="icons/logo.png" alt="Logo" class="hero-logo">
+  <h1 class="hero-title">Progress Tracker</h1>
+  <p class="hero-tagline">This is a <strong>Progressive Web App (PWA)</strong>. No need to download from the Play Store—just install it directly through your browser for a native experience!</p>
+
+  <div class="dl-card">
+    <button class="btn-dl" id="install-trigger" style="border:none;cursor:pointer">Install App on Device</button>
+    <div id="fallback-msg" style="margin-top:12px;font-size:13px;color:var(--accent);display:none">
+      If the button above doesn't work, follow the steps below:
+    </div>
+    <div class="instruction">
+      <p><strong>Step-by-step Installation:</strong></p>
+      <ol>
+        <li>Open this page in <strong>Chrome</strong> (Android) or <strong>Safari</strong> (iPhone).</li>
+        <li>Tap the <strong>three dots</strong> or <strong>Share</strong> button.</li>
+        <li>Select <strong>"Install App"</strong> or <strong>"Add to Home Screen"</strong>.</li>
+        <li>The Progress Tracker icon will appear on your phone like any other app!</li>
+      </ol>
+    </div>
+  </div>
+
+  <a href="index.html" class="back-btn">Go to Web App →</a>
+
+  <script>
+    let deferredPrompt;
+    const btn = document.getElementById('install-trigger');
+    const fallback = document.getElementById('fallback-msg');
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      btn.innerText = "Install App Now";
+      btn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        deferredPrompt = null;
+      });
+    });
+
+    // If prompt doesn't show up in 2 seconds, show fallback
+    setTimeout(() => {
+      if (!deferredPrompt) {
+        fallback.style.display = 'block';
+      }
+    }, 2000);
+
+    btn.addEventListener('click', () => {
+      if (!deferredPrompt) {
+        alert("Your browser is not ready for direct installation. Please use the 'Add to Home Screen' option in your browser menu.");
+      }
+    });
+  </script>
+</body>
+</html>

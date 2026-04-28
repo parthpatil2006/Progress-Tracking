@@ -1,0 +1,23 @@
+{
+  "name": "Progress Tracker",
+  "short_name": "Progress",
+  "description": "Offline habit tracker with city builder",
+  "theme_color": "#0F1117",
+  "background_color": "#0F1117",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "start_url": "/",
+  "icons": [
+    {
+      "src": "icons/logo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icons/logo.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
