@@ -3,12 +3,13 @@
 
 const db = new Dexie('ProgressTrackerDB');
 
-db.version(2).stores({
+db.version(3).stores({
   Habit: '++id, name, category, difficulty, reminder_time, note, created_at, is_active',
   HabitLog: '++id, habit_id, date, completed, xp_earned, [habit_id+date]',
   MoodLog: '++id, date, mood_level, note', // date is UNIQUE logically
   UserStats: 'id, total_xp, current_level, city_days, city_days_logged_today, last_active_date, theme',
-  HabitNote: '++id, habit_id, date, content, created_at, [habit_id+date]'
+  HabitNote: '++id, habit_id, date, content, created_at, [habit_id+date]',
+  Task: '++id, name, completed, created_at'
 });
 
 // Initialization
@@ -121,21 +122,29 @@ async function upsertNote(habit_id, date, content) {
   }
 }
 
-// Reset Everything
-async function resetAllData() {
-  await db.transaction('rw', db.Habit, db.HabitLog, db.MoodLog, db.UserStats, db.HabitNote, async () => {
-    await db.Habit.clear();
-    await db.HabitLog.clear();
-    await db.MoodLog.clear();
-    await db.HabitNote.clear();
-    await db.UserStats.put({
-      id: 1,
-      total_xp: 0,
-      current_level: 1,
-      city_days: 0,
-      city_days_logged_today: 0,
-      last_active_date: '',
-      theme: 'dark'
-    });
-  });
+// Tasks
+async function addTask(name) {
+  return await db.Task.add({ name, completed: 0, created_at: new Date().toISOString().split('T')[0] });
+}
+
+async function getAllTasks() {
+  return await db.Task.orderBy('created_at').toArray();
+}
+
+async function toggleTask(id, currentlyDone) {
+  await db.Task.update(id, { completed: currentlyDone ? 0 : 1 });
+}
+
+async function deleteTask(id) {
+  await db.Task.delete(id);
+}
+
+// Reset tasks after reaching 12 items
+async function resetTasksIfLimit() {
+  const tasks = await getAllTasks();
+  if (tasks.length >= 12) {
+    // uncheck all tasks
+    await db.Task.where('id').anyOf(tasks.map(t => t.id)).modify({ completed: 0 });
+    // optional: could also clear list, but spec says reset after 12
+  }
 }

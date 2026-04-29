@@ -407,6 +407,115 @@ textarea.form-input { height: auto; resize: none; padding: 12px 14px; line-heigh
 .more-menu-btn:active { transform: scale(0.98); background: var(--card-hover); }
 .more-menu-btn span:last-child { color: var(--text-sub); font-size: 18px; }
 
+/* =========================================
+   MOBILE & PWA OPTIMIZATIONS
+   ========================================= */
 
+/* Prevent text selection on interactive elements */
+button, .nav-tab, .habit-cb-wrap {
+  -webkit-user-select: none;
+  user-select: none;
+}
 
+/* Remove default tap highlight on mobile */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Momentum scrolling on iOS */
+.screen {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+}
+
+/* Safe area insets — notch / home indicator on iPhone/Android */
+#app {
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+#bottom-nav {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  height: calc(64px + env(safe-area-inset-bottom, 0px));
+}
+
+/* Screens sit above taller nav */
+.screen {
+  bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+}
+
+/* FAB sits above taller nav too */
+#fab {
+  bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+}
+
+/* Snackbar above nav */
+#snackbar {
+  bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+}
+
+/* Prevent double-tap zoom on buttons */
+button {
+  touch-action: manipulation;
+}
+
+/* Better font rendering on mobile */
+body {
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* ── HOME SCREEN top-bar sticky doesn't get cut off on iOS ── */
+#screen-home {
+  padding-top: 0; /* top bar is sticky inside, not fixed outside */
+}
+
+/* ── Input fields on iOS — prevent auto zoom ── */
+input[type="text"],
+input[type="email"],
+input[type="search"],
+textarea {
+  font-size: 16px; /* iOS zooms in if font-size < 16px in inputs */
+}
+
+/* Override to keep design font sizes for the inline habit input on larger screens */
+@media (min-width: 480px) {
+  input[type="text"] {
+    font-size: 13px;
+  }
+}
+
+/* ── Install Banner (mobile polish) ── */
+.install-banner {
+  padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+}
+
+/* ── Touch feedback for habit cards ── */
+.habit-card:active {
+  opacity: 0.8;
+}
+
+/* ── Wider screens: center the app nicely ── */
+@media (min-width: 768px) {
+  #app-wrapper {
+    align-items: center;
+  }
+  #app {
+    border-left: 1px solid #2A2D3E;
+    border-right: 1px solid #2A2D3E;
+    border-radius: 0;
+  }
+}
+
+@media (min-width: 1200px) {
+  .screen {
+    bottom: 0;
+  }
+  #fab {
+    bottom: 20px;
+  }
+  #snackbar {
+    bottom: 30px;
+  }
+}
 
