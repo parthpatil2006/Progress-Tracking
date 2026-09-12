@@ -1,157 +1,155 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=5,viewport-fit=cover"/>
-  <meta name="theme-color" content="#0F1117"/>
-  <meta name="color-scheme" content="dark"/>
-  <meta name="description" content="Offline daily habit tracker. Build streaks, track progress, grow your city."/>
-  <meta name="mobile-web-app-capable" content="yes"/>
-  <meta name="apple-mobile-web-app-capable" content="yes"/>
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
-  <meta name="apple-mobile-web-app-title" content="Progress"/>
-  <meta name="application-name" content="Progress Tracker"/>
-  <meta name="msapplication-TileColor" content="#0F1117"/>
-  <title>Progress Tracker</title>
-
-  <link rel="manifest" href="manifest.json"/>
-  <link rel="apple-touch-icon" href="icons/logo.png"/>
-  <link rel="apple-touch-startup-image" href="icons/logo.png"/>
-  <link rel="preconnect" href="https://fonts.googleapis.com"/>
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
-  
-  <link rel="stylesheet" href="css/main.css"/>
-  
-  <!-- Dexie.js for IndexedDB -->
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=0">
+  <meta name="theme-color" content="#0C0C0E">
+  <meta name="color-scheme" content="dark">
+  <meta name="description" content="HabitForge — Offline habit tracking, gamified skyline building, and productivity analytics for high performers.">
+  <title>HabitForge — Habit &amp; Productivity Architecture</title>
+  <link rel="icon" type="image/svg+xml" href="icons/icon.svg">
+  <link rel="manifest" href="manifest.json">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/main.css">
   <script src="https://unpkg.com/dexie@3.2.4/dist/dexie.js"></script>
-  <!-- Chart/Graph utilities (we will draw SVGs mostly, but let's keep it clean) -->
 </head>
 <body>
-<div id="app-wrapper">
-  <button onclick="App.triggerInstall()" class="install-corner-btn desktop-only" style="position:absolute;top:16px;right:16px">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-    Download App
-  </button>
+  <div id="app-wrapper">
+    <!-- Desktop Sidebar (>1200px) -->
+    <aside id="desktop-sidebar" class="desktop-only">
+      <div class="sidebar-logo">
+        <div class="avatar-circle" style="color:var(--text-primary); font-weight:800; font-size:14px;">⚡</div>
+        <span class="sidebar-title" style="font-weight:800; letter-spacing:0.3px;">HabitForge</span>
+      </div>
+      <nav class="sidebar-nav">
+        <!-- Populated dynamically by app.js -->
+      </nav>
+    </aside>
+
+    <main id="app">
+      <!-- Main Screens -->
+      <div id="screen-home" class="screen active"></div>
+      <div id="screen-stats" class="screen"></div>
+      <div id="screen-city" class="screen"></div>
+      <div id="screen-calendar" class="screen"></div>
+      <div id="screen-more" class="screen">
+        <div class="top-bar">
+          <div class="top-bar-title">More Features</div>
+        </div>
+        <div class="more-menu">
+          <button class="more-menu-btn" onclick="pushScreen('weekly-review')">
+            <div style="display:flex; align-items:center; gap:12px;">
+              <span style="font-size:18px;">📊</span>
+              <span>Weekly Review</span>
+            </div>
+            <span style="color:var(--text-secondary);">&rarr;</span>
+          </button>
+          <button class="more-menu-btn" onclick="pushScreen('notes')">
+            <div style="display:flex; align-items:center; gap:12px;">
+              <span style="font-size:18px;">📝</span>
+              <span>Journal &amp; Reflections</span>
+            </div>
+            <span style="color:var(--text-secondary);">&rarr;</span>
+          </button>
+          <button class="more-menu-btn" onclick="pushScreen('analytics')">
+            <div style="display:flex; align-items:center; gap:12px;">
+              <span style="font-size:18px;">📈</span>
+              <span>Productivity Analytics</span>
+            </div>
+            <span style="color:var(--text-secondary);">&rarr;</span>
+          </button>
+          <button class="more-menu-btn" onclick="pushScreen('settings')">
+            <div style="display:flex; align-items:center; gap:12px;">
+              <span style="font-size:18px;">⚙️</span>
+              <span>Settings &amp; Backup</span>
+            </div>
+            <span style="color:var(--text-secondary);">&rarr;</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Pushed Sub-Screens -->
+      <div id="screen-habit-detail" class="screen push-screen"></div>
+      <div id="screen-weekly-review" class="screen push-screen"></div>
+      <div id="screen-notes" class="screen push-screen"></div>
+      <div id="screen-analytics" class="screen push-screen"></div>
+      <div id="screen-settings" class="screen push-screen"></div>
+
+      <!-- Bottom Navigation (Mobile & Tablet) -->
+      <nav id="bottom-nav">
+        <button class="nav-tab active" data-tab="home" id="nav-home" aria-label="Dashboard">
+          <svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+          <span class="nav-label">Home</span>
+          <span class="nav-indicator"></span>
+        </button>
+        <button class="nav-tab" data-tab="stats" id="nav-stats" aria-label="Statistics">
+          <svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+          <span class="nav-label">Stats</span>
+          <span class="nav-indicator"></span>
+        </button>
+        <button class="nav-tab" data-tab="city" id="nav-city" aria-label="Skyline">
+          <svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none"><rect x="3" y="8" width="7" height="13"/><rect x="14" y="3" width="7" height="18"/><path d="M10 21V12h4v9"/></svg>
+          <span class="nav-label">Skyline</span>
+          <span class="nav-indicator"></span>
+        </button>
+        <button class="nav-tab" data-tab="calendar" id="nav-calendar" aria-label="Calendar">
+          <svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          <span class="nav-label">Calendar</span>
+          <span class="nav-indicator"></span>
+        </button>
+        <button class="nav-tab" data-tab="more" id="nav-more" aria-label="More">
+          <svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+          <span class="nav-label">More</span>
+          <span class="nav-indicator"></span>
+        </button>
+      </nav>
+
+      <!-- Floating Action Button (+ Habit) -->
+      <button id="fab" onclick="openAddHabitSheet()" aria-label="Create new habit">
+        <svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" fill="none"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      </button>
+
+      <!-- Overlays & Bottom Sheets -->
+      <div id="mood-checkin-overlay" class="dialog-overlay hidden">
+        <div id="mood-checkin-card" class="dialog-card"></div>
+      </div>
+      
+      <div id="sheet-overlay" class="sheet-overlay hidden" onclick="closeAllSheets()"></div>
+      <div id="add-habit-sheet" class="bottom-sheet hidden"></div>
+      <div id="habit-note-sheet" class="bottom-sheet hidden"></div>
+      <div id="day-detail-sheet" class="bottom-sheet hidden"></div>
+      
+      <div id="celebration-overlay" class="hidden"></div>
+      <div id="reset-dialog-overlay" class="dialog-overlay hidden">
+        <div id="reset-dialog" class="dialog-card"></div>
+      </div>
+      <div id="snackbar" class="snackbar hidden"></div>
+      <div id="install-banner" class="install-banner hidden"></div>
+    </main>
+
+    <!-- Desktop Aside (>1200px) -->
+    <aside id="desktop-right-panel" class="desktop-only"></aside>
+  </div>
   
-  <!-- Desktop Sidebar Navigation (>1200px) -->
-  <aside id="desktop-sidebar" class="desktop-only">
-    <div class="sidebar-logo">
-      <div class="avatar-circle">PT</div>
-      <span class="sidebar-title">Progress Tracker</span>
-    </div>
-    <nav class="sidebar-nav">
-      <!-- Generated via JS to match bottom nav -->
-    </nav>
-    <div class="sidebar-stats">
-      <!-- User stats injected here -->
-    </div>
-  </aside>
+  <canvas id="confetti-canvas"></canvas>
 
-  <main id="app">
-    <!-- Screens -->
-    <div id="screen-home" class="screen active"></div>
-    <div id="screen-stats" class="screen"></div>
-    <div id="screen-city" class="screen"></div>
-    <div id="screen-calendar" class="screen"></div>
-    <div id="screen-more" class="screen">
-      <!-- More menu container -->
-      <div class="top-bar">
-        <div class="top-bar-title">More</div>
-      </div>
-      <div class="more-menu">
-        <button class="more-menu-btn" data-target="weekly-review">
-          <span>Weekly Review</span><span>→</span>
-        </button>
-        <button class="more-menu-btn" data-target="notes">
-          <span>Notes</span><span>→</span>
-        </button>
-        <button class="more-menu-btn" data-target="settings">
-          <span>Settings</span><span>→</span>
-        </button>
-      </div>
-    </div>
-    
-    <!-- Pushed Screens from More -->
-    <div id="screen-weekly-review" class="screen push-screen"></div>
-    <div id="screen-notes" class="screen push-screen"></div>
-    <div id="screen-settings" class="screen push-screen"></div>
-
-    <!-- Bottom Navigation -->
-    <nav id="bottom-nav">
-      <button class="nav-tab active" data-tab="home" id="nav-home">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-        <span class="nav-label">Home</span><span class="nav-indicator"></span>
-      </button>
-      <button class="nav-tab" data-tab="stats" id="nav-stats">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-        <span class="nav-label">Stats</span><span class="nav-indicator"></span>
-      </button>
-      <button class="nav-tab" data-tab="city" id="nav-city">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="7" height="13"/><rect x="14" y="3" width="7" height="18"/><path d="M10 21V12h4v9"/></svg>
-        <span class="nav-label">City</span><span class="nav-indicator"></span>
-      </button>
-      <button class="nav-tab" data-tab="calendar" id="nav-calendar">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-        <span class="nav-label">Calendar</span><span class="nav-indicator"></span>
-      </button>
-      <button class="nav-tab" data-tab="more" id="nav-more">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
-        <span class="nav-label">More</span><span class="nav-indicator"></span>
-      </button>
-    </nav>
-
-    <!-- FAB -->
-    <button id="fab" aria-label="Add Habit">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-    </button>
-
-    <!-- Overlays & Bottom Sheets -->
-    <div id="mood-checkin-overlay" class="dialog-overlay hidden">
-      <div id="mood-checkin-card" class="dialog-card">
-        <!-- Rendered via JS -->
-      </div>
-    </div>
-    
-    <div id="sheet-overlay" class="sheet-overlay hidden"></div>
-    <div id="add-habit-sheet" class="bottom-sheet hidden"></div>
-    <div id="habit-note-sheet" class="bottom-sheet hidden"></div>
-    <div id="day-detail-sheet" class="bottom-sheet hidden"></div>
-
-    <!-- Celebration & Alerts -->
-    <div id="celebration-overlay" class="hidden"></div>
-    <div id="reset-dialog-overlay" class="dialog-overlay hidden"><div id="reset-dialog" class="dialog-card"></div></div>
-    <div id="snackbar" class="snackbar hidden"></div>
-
-    <div id="install-banner" class="install-banner hidden">
-      <span>Add to Home Screen for the full experience</span>
-      <button id="install-btn">Install</button>
-      <button id="install-dismiss">✕</button>
-    </div>
-  </main>
-  
-  <!-- Desktop Right Panel (>1200px) -->
-  <aside id="desktop-right-panel" class="desktop-only">
-    <!-- Today summary, sticky aside -->
-  </aside>
-</div>
-
-<!-- Confetti Canvas -->
-<canvas id="confetti-canvas"></canvas>
-
-<!-- Scripts -->
-<script src="js/db.js"></script>
-<script src="js/utils.js"></script>
-<script src="js/city-svg.js"></script>
-<script src="js/screens/home.js"></script>
-<script src="js/screens/stats.js"></script>
-<script src="js/screens/city.js"></script>
-<script src="js/screens/calendar.js"></script>
-<script src="js/screens/weekly-review.js"></script>
-<script src="js/screens/notes.js"></script>
-<script src="js/screens/settings.js"></script>
-<script src="js/screens/add-habit.js"></script>
-<script src="js/celebration.js"></script>
-<script src="js/app.js"></script>
+  <!-- Script Pipeline -->
+  <script src="js/db.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/quotes.js"></script>
+  <script src="js/city-svg.js"></script>
+  <script src="js/celebration.js"></script>
+  <script src="js/notifications.js"></script>
+  <script src="js/screens/add-habit.js"></script>
+  <script src="js/screens/home.js"></script>
+  <script src="js/screens/stats.js"></script>
+  <script src="js/screens/city.js"></script>
+  <script src="js/screens/calendar.js"></script>
+  <script src="js/screens/settings.js"></script>
+  <script src="js/screens/habit-detail.js"></script>
+  <script src="js/screens/weekly-review.js"></script>
+  <script src="js/screens/notes.js"></script>
+  <script src="js/screens/analytics.js"></script>
+  <script src="js/app.js"></script>
 </body>
 </html>

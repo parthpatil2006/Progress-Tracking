@@ -1,30 +1,35 @@
-/* Service Worker — Progress Tracker PWA
+/* Service Worker — HabitForge PWA
    Bump CACHE_NAME whenever any asset changes so stale caches are busted. */
 
-const CACHE_NAME = 'pt-cache-v5.0';
+const CACHE_NAME = 'habitforge-cache-v7.0';
 
 const ASSETS = [
-  '/',
-  '/index.html',
-  '/install.html',
-  '/manifest.json',
-  '/css/main.css',
-  '/js/db.js',
-  '/js/utils.js',
-  '/js/city-svg.js',
-  '/js/app.js',
-  '/js/celebration.js',
-  '/js/screens/home.js',
-  '/js/screens/stats.js',
-  '/js/screens/city.js',
-  '/js/screens/calendar.js',
-  '/js/screens/weekly-review.js',
-  '/js/screens/notes.js',
-  '/js/screens/settings.js',
-  '/js/screens/add-habit.js',
-  '/icons/logo.png',
+  './',
+  './index.html',
+  './install.html',
+  './manifest.json',
+  './css/main.css',
+  './js/db.js',
+  './js/utils.js',
+  './js/quotes.js',
+  './js/city-svg.js',
+  './js/celebration.js',
+  './js/notifications.js',
+  './js/screens/add-habit.js',
+  './js/screens/home.js',
+  './js/screens/stats.js',
+  './js/screens/city.js',
+  './js/screens/calendar.js',
+  './js/screens/settings.js',
+  './js/screens/habit-detail.js',
+  './js/screens/weekly-review.js',
+  './js/screens/notes.js',
+  './js/screens/analytics.js',
+  './js/app.js',
+  './icons/icon.svg',
+  './icons/logo.png',
   'https://unpkg.com/dexie@3.2.4/dist/dexie.js',
-  'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap'
+  'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap'
 ];
 
 // ── INSTALL: cache all assets ──
@@ -47,26 +52,28 @@ self.addEventListener('activate', event => {
 
 // ── FETCH: cache-first, fall back to network ──
 self.addEventListener('fetch', event => {
-  // Skip non-GET requests
   if (event.request.method !== 'GET') return;
 
   event.respondWith(
     caches.match(event.request).then(cached => {
       if (cached) return cached;
       return fetch(event.request).then(response => {
-        // Cache successful responses from same origin + CDN
         if (response && response.status === 200) {
           const url = new URL(event.request.url);
-          if (url.origin === self.location.origin || url.hostname === 'unpkg.com' || url.hostname === 'fonts.googleapis.com' || url.hostname === 'fonts.gstatic.com') {
+          if (
+            url.origin === self.location.origin ||
+            url.hostname === 'unpkg.com' ||
+            url.hostname === 'fonts.googleapis.com' ||
+            url.hostname === 'fonts.gstatic.com'
+          ) {
             const clone = response.clone();
             caches.open(CACHE_NAME).then(c => c.put(event.request, clone));
           }
         }
         return response;
       }).catch(() => {
-        // Offline fallback for navigation requests
         if (event.request.mode === 'navigate') {
-          return caches.match('/index.html');
+          return caches.match('./index.html');
         }
       });
     })
@@ -76,7 +83,7 @@ self.addEventListener('fetch', event => {
 // ── MESSAGES ──
 self.addEventListener('message', event => {
   if (event.data && event.data.type === 'RESCHEDULE_NOTIFICATIONS') {
-    // Notification scheduling handled by client via open-tab timers.
+    // Client-side notification timers handle open tabs
   }
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();

@@ -1,144 +1,129 @@
-async function renderCity() {
+// city.js — City skyline growth, GitHub-style contribution graph, and milestone badges
+
+window.renderCity = async function() {
   const container = document.getElementById('screen-city');
-  const stats = await getUserStats();
-  const logs = await db.HabitLog.toArray();
-  const allHabits = await getAllHabits();
+  if (!container) return;
+
+  const [stats, logs, streaks] = await Promise.all([
+    getUserStats(),
+    db.HabitLog.toArray(),
+    calculateAllStreaks()
+  ]);
   
-  const levelData = calculateLevel(stats.total_xp);
+  // Group logs by date to count completions per day
+  const dailyCompletions = {};
+  logs.forEach(l => {
+    if (l.completed === 1) {
+      dailyCompletions[l.date] = (dailyCompletions[l.date] || 0) + 1;
+    }
+  });
+
+  // Generate 365 days of contribution graph
+  const gridCells = [];
+  const start = new Date();
+  start.setDate(start.getDate() - 364);
+  
+  for (let i = 0; i < 365; i++) {
+    const d = new Date(start);
+    d.setDate(d.getDate() + i);
+    const dStr = d.toISOString().split('T')[0];
+    const count = dailyCompletions[dStr] || 0;
+    
+    let color = 'var(--border)';
+    if (count > 0) color = 'rgba(217, 130, 43, 0.30)';
+    if (count > 3) color = 'rgba(217, 130, 43, 0.65)';
+    if (count > 7) color = 'var(--primary)';
+    
+    gridCells.push(`<div style="width:10px; height:10px; background:${color}; border-radius:2px;" title="${dStr}: ${count} habits completed"></div>`);
+  }
+
+  // Skyline Milestones
+  const milestones = [
+    { days: 1, label: 'First Hut', desc: '1 perfect day' },
+    { days: 3, label: 'Pathway', desc: '3 perfect days' },
+    { days: 7, label: 'Town Shop', desc: '7 perfect days' },
+    { days: 10, label: 'Apartment Block', desc: '10 perfect days' },
+    { days: 20, label: 'Commercial Tower', desc: '20 perfect days' },
+    { days: 50, label: 'Skyscraper', desc: '50 perfect days' },
+    { days: 100, label: 'Metropolis Landmark', desc: '100 perfect days' }
+  ];
 
   let html = `
     <div class="top-bar">
-      <div class="top-bar-title">Your City</div>
-      <div class="row gap-8">
-        <div style="background:var(--accent);color:#fff;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">Day ${stats.city_days}</div>
-        <div style="background:var(--primary);color:#fff;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">Level ${stats.current_level}</div>
-      </div>
-    </div>
-    
-    <div class="row gap-8" style="padding:16px">
-      <div class="card" style="flex:1;margin:0;padding:12px;text-align:center">
-        <div style="font-size:18px;font-weight:700">${Math.floor(stats.city_days / 5)}</div>
-        <div style="font-size:10px;color:var(--text-sub)">Buildings</div>
-      </div>
-      <div class="card" style="flex:1;margin:0;padding:12px;text-align:center">
-        <div style="font-size:18px;font-weight:700">${stats.city_days}</div>
-        <div style="font-size:10px;color:var(--text-sub)">Best Streak</div>
-      </div>
-      <div class="card" style="flex:1;margin:0;padding:12px;text-align:center">
-        <div style="font-size:18px;font-weight:700;color:var(--accent)">${stats.total_xp}</div>
-        <div style="font-size:10px;color:var(--text-sub)">Total XP</div>
-      </div>
-    </div>
-    
-    <!-- City SVG Container -->
-    <div id="city-svg-wrapper" style="width:100%;height:200px;background:linear-gradient(180deg, #0F1117 0%, #131829 100%);position:relative;border-bottom:1px solid var(--border)">
-      <!-- Rendered by city-svg.js -->
-    </div>
-    
-    <!-- Combined Grid -->
-    <div class="card" style="margin-top:16px;overflow-x:auto">
-      <div style="display:flex;gap:3px">
-        <div style="display:flex;flex-direction:column;gap:3px;margin-right:4px">
-          ${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => `<div style="height:12px;font-size:9px;color:var(--text-sub);display:flex;align-items:center">${d}</div>`).join('')}
-        </div>
-        <div style="display:flex;gap:3px" id="city-grid-cols"></div>
-      </div>
-      <div class="row space-between" style="margin-top:12px;font-size:10px;color:var(--text-sub)">
-        <div>Less</div>
-        <div class="row" style="gap:2px">
-          <div style="width:10px;height:10px;border-radius:2px;background:var(--grid-empty)"></div>
-          <div style="width:10px;height:10px;border-radius:2px;background:var(--grid-l1)"></div>
-          <div style="width:10px;height:10px;border-radius:2px;background:var(--grid-l2)"></div>
-          <div style="width:10px;height:10px;border-radius:2px;background:var(--grid-l3)"></div>
-          <div style="width:10px;height:10px;border-radius:2px;background:var(--grid-l4)"></div>
-        </div>
-        <div>More</div>
-      </div>
-    </div>
-    
-    <!-- Progress & Log -->
-    <div class="card">
-      <div style="font-size:14px;color:var(--text);margin-bottom:8px">Next Building — 5 more 100% days</div>
-      <div style="height:6px;border-radius:3px;background:var(--border);overflow:hidden">
-        <div style="height:100%;background:var(--primary);width:${(stats.city_days % 5) * 20}%"></div>
-      </div>
-    </div>
-    
-    <div style="padding:16px">
-      <div style="font-size:15px;font-weight:600;margin-bottom:12px">Milestones</div>
-      <div class="card" style="margin:0;padding:0">
-        ${[100, 90, 75, 50, 40, 30, 20, 15, 10, 7, 5, 3, 1].filter(d => stats.city_days >= d).map(d => `
-          <div class="row" style="padding:12px 16px;border-bottom:1px solid var(--border)">
-            <div style="width:60px;font-size:12px;color:var(--text-sub)">Day ${d}</div>
-            <div style="flex:1;font-size:14px">${getBuildingName(d)} built</div>
-            <div style="color:var(--accent)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg></div>
+      <div class="top-bar-title">Habit Skyline</div>
+      <div style="display:flex; gap:8px;">
+          <div style="background:var(--card); border:1px solid var(--border); border-radius:var(--radius-sm); padding:4px 12px; color:var(--text-secondary); font-size:11px; font-weight:600;">
+            Day ${stats.city_days}
           </div>
-        `).join('')}
-        ${stats.city_days === 0 ? `<div style="padding:16px;font-size:13px;color:var(--text-sub);text-align:center">Complete your first perfect day to start building!</div>` : ''}
+          <div style="background:var(--primary-subtle); border:1px solid var(--primary-border); border-radius:var(--radius-sm); padding:4px 12px; color:var(--primary); font-size:11px; font-weight:700;">
+            Level ${stats.current_level}
+          </div>
+        </div>
+    </div>
+    
+    <div style="padding:16px 16px 60px;">
+      <!-- Skyline Canvas Container -->
+      <div style="border-radius:var(--radius-lg); overflow:hidden; border:1px solid var(--border); background:var(--bg); margin-bottom:16px; box-shadow:var(--shadow-md);">
+        ${getCitySVG(stats.city_days)}
+      </div>
+
+      <!-- Quick Metrics Grid -->
+      <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; margin-bottom:16px;">
+        <div class="card" style="margin:0; padding:12px; text-align:center;">
+          <div style="font-size:11px; font-weight:700; color:var(--text-secondary); text-transform:uppercase;">Buildings</div>
+          <div style="font-size:22px; font-weight:800; color:var(--text-primary); margin-top:2px;">${stats.city_days}</div>
+        </div>
+        <div class="card" style="margin:0; padding:12px; text-align:center;">
+          <div style="font-size:11px; font-weight:700; color:var(--text-secondary); text-transform:uppercase;">Best Streak</div>
+          <div style="font-size:22px; font-weight:800; color:var(--text-primary); margin-top:2px;">${streaks.overallBest}d</div>
+        </div>
+        <div class="card" style="margin:0; padding:12px; text-align:center;">
+          <div style="font-size:11px; font-weight:700; color:var(--text-secondary); text-transform:uppercase;">Total XP</div>
+          <div style="font-size:22px; font-weight:800; color:var(--primary); margin-top:2px;">${stats.total_xp}</div>
+        </div>
+      </div>
+
+      <!-- Year Contribution Graph -->
+      <div class="card" style="margin:0 0 16px; padding:16px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+          <div style="font-size:13px; font-weight:700; color:var(--text-primary);">365-Day Consistency Heatmap</div>
+          <div style="font-size:11px; color:var(--text-secondary);">${logs.filter(l => l.completed === 1).length} total completions</div>
+        </div>
+        <div style="display:grid; grid-template-columns: repeat(52, 1fr); gap:3px; overflow-x:auto; padding-bottom:6px;">
+          ${gridCells.join('')}
+        </div>
+        <div style="display:flex; justify-content:space-between; margin-top:8px; font-size:10px; color:var(--text-secondary);">
+          <span>1 year ago</span>
+          <span>Today</span>
+        </div>
+      </div>
+
+      <!-- Skyline Architecture Milestones -->
+      <div class="card" style="margin:0; padding:16px;">
+        <div style="font-size:13px; font-weight:700; color:var(--text-primary); margin-bottom:12px;">Skyline Milestones</div>
+        <div style="display:flex; flex-direction:column; gap:10px;">
+          ${milestones.map(m => {
+            const unlocked = stats.city_days >= m.days;
+            return `
+              <div style="display:flex; align-items:center; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--border);">
+                <div style="display:flex; align-items:center; gap:10px;">
+                  <div style="width:28px; height:28px; border-radius:14px; background:${unlocked ? 'rgba(16,185,129,0.15)' : 'var(--card-alt)'}; border:1px solid ${unlocked ? 'var(--success)' : 'var(--border)'}; display:flex; align-items:center; justify-content:center; font-size:12px;">
+                    ${unlocked ? '✓' : '🔒'}
+                  </div>
+                  <div>
+                    <div style="font-size:13px; font-weight:700; color:${unlocked ? 'var(--text-primary)' : 'var(--text-secondary)'};">${m.label}</div>
+                    <div style="font-size:11px; color:var(--text-secondary);">${m.desc}</div>
+                  </div>
+                </div>
+                <div style="font-size:11px; font-weight:700; color:${unlocked ? 'var(--success)' : 'var(--text-secondary)'};">
+                  ${unlocked ? 'Unlocked' : `${m.days - stats.city_days} days left`}
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
       </div>
     </div>
   `;
-
   container.innerHTML = html;
-  
-  renderCitySVG(stats.city_days);
-  renderCityGrid(logs, allHabits);
-}
-
-function getBuildingName(day) {
-  if (day >= 100) return "Skyline Tower";
-  if (day >= 90) return "Suspension Bridge";
-  if (day >= 75) return "City Hall Dome";
-  if (day >= 60) return "Second Skyscraper";
-  if (day >= 50) return "Skyscraper";
-  if (day >= 40) return "Park Fountain";
-  if (day >= 30) return "Central Library";
-  if (day >= 20) return "Office Tower";
-  if (day >= 15) return "School Building";
-  if (day >= 10) return "Apartment Block";
-  if (day >= 7) return "Corner Shop";
-  if (day >= 5) return "Small Park";
-  if (day >= 3) return "Neighborhood";
-  if (day >= 1) return "First House";
-  return "Foundation";
-}
-
-function renderCityGrid(logs, habits) {
-  // We'll generate the last 16 weeks
-  const gridContainer = document.getElementById('city-grid-cols');
-  let gridHtml = '';
-  
-  const today = new Date();
-  const cursor = new Date(today);
-  cursor.setDate(cursor.getDate() - (today.getDay())); // Go to previous Sunday
-  cursor.setDate(cursor.getDate() - (15 * 7)); // Go back 16 weeks
-  
-  for (let w = 0; w < 16; w++) {
-    gridHtml += `<div style="display:flex;flex-direction:column;gap:3px">`;
-    for (let d = 0; d < 7; d++) {
-      const dStr = cursor.toISOString().split('T')[0];
-      const dayLogs = logs.filter(l => l.date === dStr);
-      const doneCount = dayLogs.filter(l => l.completed).length;
-      const totalCount = habits.length; // Approximate for now
-      
-      let fill = 'var(--grid-empty)';
-      if (totalCount > 0) {
-        const pct = doneCount / totalCount;
-        if (pct > 0) fill = 'var(--grid-l1)';
-        if (pct >= 0.26) fill = 'var(--grid-l2)';
-        if (pct >= 0.51) fill = 'var(--grid-l3)';
-        if (pct >= 0.76) fill = 'var(--grid-l4)';
-      }
-      
-      const isToday = dStr === todayStr();
-      const border = isToday ? '1px solid var(--accent)' : 'none';
-      
-      gridHtml += `<div style="width:12px;height:12px;border-radius:2px;background:${fill};border:${border}"></div>`;
-      
-      cursor.setDate(cursor.getDate() + 1);
-    }
-    gridHtml += `</div>`;
-  }
-  
-  gridContainer.innerHTML = gridHtml;
-}
+};

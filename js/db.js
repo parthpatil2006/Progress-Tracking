@@ -1,81 +1,76 @@
-// Database wrapper using Dexie.js
-// Identical schema logic to SQLite specs
+const db = new Dexie("ProgressTrackerV4");
 
-const db = new Dexie('ProgressTrackerDB');
-
-db.version(3).stores({
-  Habit: '++id, name, category, difficulty, reminder_time, note, created_at, is_active',
-  HabitLog: '++id, habit_id, date, completed, xp_earned, [habit_id+date]',
-  MoodLog: '++id, date, mood_level, note', // date is UNIQUE logically
-  UserStats: 'id, total_xp, current_level, city_days, city_days_logged_today, last_active_date, theme',
-  HabitNote: '++id, habit_id, date, content, created_at, [habit_id+date]',
-  Task: '++id, name, completed, created_at'
+db.version(1).stores({
+  Habit: "++id, name, category, difficulty, accent_color, reminder_time, note, created_at, is_active",
+  HabitLog: "++id, habit_id, date, [habit_id+date]",
+  MoodLog: "++id, &date, mood_level, note",
+  HabitNote: "++id, habit_id, date, [habit_id+date]",
+  UserStats: "id"
 });
 
-// Initialization
+const DEFAULT_HABITS = [
+  { id: 1, name: 'English learning 1hr', category: 'Learning', difficulty: 2, accent_color: '#A78BFA' },
+  { id: 2, name: 'DSA 2hr', category: 'Learning', difficulty: 3, accent_color: '#34C97D' },
+  { id: 3, name: 'JAVA 4hr', category: 'Learning', difficulty: 3, accent_color: '#4F8EF7' },
+  { id: 4, name: 'Networking 1hr', category: 'Learning', difficulty: 2, accent_color: '#F5A623' },
+  { id: 5, name: 'OSI MODEL 1hr', category: 'Learning', difficulty: 2, accent_color: '#F75A5A' },
+  { id: 6, name: 'IP Address 1hr', category: 'Learning', difficulty: 1, accent_color: '#38BDF8' },
+  { id: 7, name: 'Reading books 1hr', category: 'Learning', difficulty: 2, accent_color: '#FB923C' },
+  { id: 8, name: 'Project 1hr', category: 'Productivity', difficulty: 2, accent_color: '#E879F9' },
+  { id: 9, name: '3 Time meals', category: 'Wellness', difficulty: 1, accent_color: '#4ADE80' },
+  { id: 10, name: 'GYM', category: 'Core', difficulty: 3, accent_color: '#FACC15' },
+  { id: 11, name: 'Skin care', category: 'Wellness', difficulty: 1, accent_color: '#60A5FA' },
+  { id: 12, name: '8 hour sleep', category: 'Wellness', difficulty: 1, accent_color: '#F472B6' }
+];
+
 async function initDB() {
-  await db.open();
-  
-  // Ensure UserStats exists (always id 1)
-  const stats = await db.UserStats.get(1);
-  if (!stats) {
-    await db.UserStats.put({
+  const habitsCount = await db.Habit.count();
+  if (habitsCount === 0) {
+    const today = new Date().toISOString().split('T')[0];
+    for (const h of DEFAULT_HABITS) {
+      await db.Habit.add({
+        id: h.id,
+        name: h.name,
+        category: h.category,
+        difficulty: h.difficulty,
+        accent_color: h.accent_color,
+        reminder_time: null,
+        note: '',
+        created_at: today,
+        is_active: 1
+      });
+    }
+  }
+
+  const statsCount = await db.UserStats.count();
+  if (statsCount === 0) {
+    await db.UserStats.add({
       id: 1,
       total_xp: 0,
       current_level: 1,
       city_days: 0,
       city_days_logged_today: 0,
-      last_active_date: '',
+      last_active_date: null,
       theme: 'dark'
     });
   }
 }
 
-// UserStats
+// Data access helpers
 async function getUserStats() {
   return await db.UserStats.get(1);
 }
 
 async function updateUserStats(updates) {
-  await db.UserStats.update(1, updates);
+  return await db.UserStats.update(1, updates);
 }
 
-// Habits
 async function getActiveHabits() {
   return await db.Habit.where('is_active').equals(1).toArray();
 }
 
-async function getAllHabits() {
-  return await db.Habit.toArray();
-}
-
-async function addHabit(habit) {
-  return await db.Habit.add({
-    ...habit,
-    is_active: 1,
-    created_at: new Date().toISOString().split('T')[0]
-  });
-}
-
-async function archiveHabit(id) {
-  await db.Habit.update(id, { is_active: 0 });
-}
-
-// Habit Logs
-async function getLog(habit_id, date) {
-  return await db.HabitLog.where('[habit_id+date]').equals([habit_id, date]).first();
-}
-
-async function getLogsForDate(date) {
-  return await db.HabitLog.where('date').equals(date).toArray();
-}
-
-async function getLogsForHabit(habit_id) {
-  return await db.HabitLog.where('habit_id').equals(habit_id).toArray();
-}
-
-async function upsertLog(habit_id, date, completed, xp_earned) {
-  const existing = await getLog(habit_id, date);
+async function upsertHabitLog(habit_id, date, completed, xp_earned) {
+  const existing = await db.HabitLog.where({ habit_id, date }).first();
   if (existing) {
     await db.HabitLog.update(existing.id, { completed, xp_earned });
   } else {
@@ -83,17 +78,16 @@ async function upsertLog(habit_id, date, completed, xp_earned) {
   }
 }
 
-// Mood Log
+async function getLogsForDate(date) {
+  return await db.HabitLog.where('date').equals(date).toArray();
+}
+
 async function getMoodForDate(date) {
-  return await db.MoodLog.where('date').equals(date).first();
+  return await db.MoodLog.get({ date });
 }
 
-async function getRecentMoods(limit = 7) {
-  return await db.MoodLog.orderBy('date').reverse().limit(limit).toArray();
-}
-
-async function upsertMood(date, mood_level, note = '') {
-  const existing = await getMoodForDate(date);
+async function saveMood(date, mood_level, note = '') {
+  const existing = await db.MoodLog.get({ date });
   if (existing) {
     await db.MoodLog.update(existing.id, { mood_level, note });
   } else {
@@ -101,50 +95,68 @@ async function upsertMood(date, mood_level, note = '') {
   }
 }
 
-// Notes
-async function getNote(habit_id, date) {
-  return await db.HabitNote.where('[habit_id+date]').equals([habit_id, date]).first();
+async function getAllHabits() {
+  return await db.Habit.toArray();
 }
 
-async function getAllNotes() {
-  return await db.HabitNote.orderBy('date').reverse().toArray();
+async function addHabit(habitData) {
+  const today = (typeof todayStr === 'function') ? todayStr() : new Date().toISOString().split('T')[0];
+  const catColors = {
+    'Core': '#D9822B',
+    'Wellness': '#10B981',
+    'Learning': '#64748B',
+    'Productivity': '#D97706'
+  };
+  const accent_color = habitData.accent_color || catColors[habitData.category] || '#D9822B';
+  
+  const id = await db.Habit.add({
+    name: habitData.name.trim(),
+    category: habitData.category || 'Core',
+    difficulty: Number(habitData.difficulty) || 1,
+    accent_color: accent_color,
+    reminder_time: habitData.reminder_time || null,
+    note: habitData.note ? habitData.note.trim() : '',
+    created_at: today,
+    is_active: 1
+  });
+
+  // Automatically insert initial log row for today
+  await db.HabitLog.add({
+    habit_id: id,
+    date: today,
+    completed: 0,
+    xp_earned: 0
+  });
+
+  return id;
 }
 
-async function upsertNote(habit_id, date, content) {
-  const existing = await getNote(habit_id, date);
-  if (existing) {
-    await db.HabitNote.update(existing.id, { content });
+async function updateHabit(id, updates) {
+  return await db.Habit.update(Number(id), updates);
+}
+
+async function deleteHabit(id, hardDelete = false) {
+  const numId = Number(id);
+  if (hardDelete) {
+    await db.HabitLog.where('habit_id').equals(numId).delete();
+    await db.HabitNote.where('habit_id').equals(numId).delete();
+    return await db.Habit.delete(numId);
   } else {
-    await db.HabitNote.add({ 
-      habit_id, date, content, 
-      created_at: new Date().toISOString() 
-    });
+    // Soft delete/archive
+    return await db.Habit.update(numId, { is_active: 0 });
   }
 }
 
-// Tasks
-async function addTask(name) {
-  return await db.Task.add({ name, completed: 0, created_at: new Date().toISOString().split('T')[0] });
+async function resetAllData() {
+  await db.transaction('rw', db.Habit, db.HabitLog, db.MoodLog, db.HabitNote, db.UserStats, async () => {
+    await db.Habit.clear();
+    await db.HabitLog.clear();
+    await db.MoodLog.clear();
+    await db.HabitNote.clear();
+    await db.UserStats.clear();
+  });
+  
+  // Re-seed defaults
+  await initDB();
 }
 
-async function getAllTasks() {
-  return await db.Task.orderBy('created_at').toArray();
-}
-
-async function toggleTask(id, currentlyDone) {
-  await db.Task.update(id, { completed: currentlyDone ? 0 : 1 });
-}
-
-async function deleteTask(id) {
-  await db.Task.delete(id);
-}
-
-// Reset tasks after reaching 12 items
-async function resetTasksIfLimit() {
-  const tasks = await getAllTasks();
-  if (tasks.length >= 12) {
-    // uncheck all tasks
-    await db.Task.where('id').anyOf(tasks.map(t => t.id)).modify({ completed: 0 });
-    // optional: could also clear list, but spec says reset after 12
-  }
-}

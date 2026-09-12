@@ -1,76 +1,26 @@
-function renderCitySVG(cityDays) {
-  const container = document.getElementById('city-svg-wrapper');
-  if (!container) return;
-
-  // Render SVG based on cityDays
-  // The skyline builds cumulatively.
-  
+// city-svg.js
+function getCitySVG(days) {
+  // SVG stages based on Section H
+  // Simplified silhouettes for demonstration
   let buildings = '';
-  
-  // Base ground
-  buildings += `<rect x="0" y="199" width="100%" height="1" fill="var(--border)" />`;
+  if (days >= 1) buildings += '<rect x="20" y="160" width="30" height="30" fill="#4B5563" /><rect x="25" y="170" width="6" height="6" fill="#FACC15" />'; // House with light
+  if (days >= 3) buildings += '<rect x="60" y="160" width="30" height="30" fill="#4B5563" /><path d="M50 190 L100 190" stroke="#4F8EF7" stroke-width="2" />'; // House + path
+  if (days >= 7) buildings += '<rect x="100" y="150" width="40" height="40" fill="#374151" /><rect x="105" y="160" width="30" height="10" fill="#60A5FA" opacity="0.4" />'; // Shop
+  if (days >= 10) buildings += '<rect x="150" y="110" width="45" height="80" fill="#374151" /><rect x="160" y="120" width="25" height="40" fill="#FACC15" opacity="0.3" />'; // Apartment
+  if (days >= 20) buildings += '<rect x="210" y="80" width="50" height="110" fill="#1F2937" /><rect x="220" y="90" width="30" height="80" fill="#4F8EF7" opacity="0.2" />'; // Office
+  if (days >= 50) buildings += '<rect x="280" y="40" width="55" height="150" fill="#111827" /><rect x="290" y="50" width="35" height="130" fill="#FFFFFF" opacity="0.1" />'; // Skyscraper
+  if (days >= 100) buildings += '<rect x="350" y="10" width="60" height="180" fill="#030712" /><circle cx="380" cy="30" r="2" fill="#F75A5A" />'; // Landmark
 
-  if (cityDays >= 1) {
-    // Small house 1
-    buildings += `<rect x="40" y="160" width="30" height="40" fill="#1A2838" />`;
-    buildings += `<polygon points="35,160 55,145 75,160" fill="#2A1A2E" />`;
-    buildings += `<rect x="50" y="170" width="10" height="10" fill="#F5A623" />`;
-  }
-  
-  if (cityDays >= 3) {
-    // House 2
-    buildings += `<rect x="90" y="150" width="40" height="50" fill="#1E2A1E" />`;
-    buildings += `<rect x="100" y="160" width="8" height="12" fill="#F5A623" />`;
-    buildings += `<rect x="115" y="160" width="8" height="12" fill="#F5A623" />`;
-  }
-  
-  if (cityDays >= 5) {
-    // Trees
-    buildings += `<circle cx="20" cy="180" r="15" fill="#1A4A2E" />`;
-    buildings += `<circle cx="150" cy="185" r="10" fill="#1A4A2E" />`;
-    buildings += `<circle cx="165" cy="175" r="18" fill="#1A4A2E" />`;
-  }
-
-  if (cityDays >= 10) {
-    // Apartment
-    buildings += `<rect x="180" y="120" width="60" height="80" fill="#1A2838" />`;
-    for(let r=0; r<3; r++) {
-      for(let c=0; c<3; c++) {
-        buildings += `<rect x="${188 + c*16}" y="${130 + r*20}" width="8" height="12" fill="#F5A623" />`;
-      }
-    }
-  }
-
-  if (cityDays >= 20) {
-    // Office Tower
-    buildings += `<rect x="260" y="80" width="50" height="120" fill="#1E2A1E" />`;
-    for(let r=0; r<5; r++) {
-      for(let c=0; c<2; c++) {
-        buildings += `<rect x="${270 + c*20}" y="${90 + r*20}" width="12" height="12" fill="#F5A623" />`;
-      }
-    }
-  }
-
-  if (cityDays >= 50) {
-    // Skyscraper
-    buildings += `<rect x="330" y="40" width="60" height="160" fill="#1A2838" />`;
-    buildings += `<polygon points="330,40 360,10 390,40" fill="#2A1A2E" />`;
-    for(let r=0; r<8; r++) {
-      for(let c=0; c<3; c++) {
-        buildings += `<rect x="${340 + c*15}" y="${50 + r*18}" width="6" height="10" fill="#F5A623" />`;
-      }
-    }
-  }
-  
-  if (cityDays >= 75) {
-    // City Hall Dome
-    buildings += `<rect x="410" y="140" width="80" height="60" fill="#2A1A2E" />`;
-    buildings += `<path d="M 410 140 A 40 40 0 0 1 490 140 Z" fill="#1E2A1E" />`;
-  }
-
-  // Ensure full width coverage by scaling SVG
-  container.innerHTML = `
-    <svg width="100%" height="100%" viewBox="0 0 500 200" preserveAspectRatio="xMidYMax meet">
+  return `
+    <svg viewBox="0 0 440 200" width="100%" height="200" style="background: linear-gradient(#0F1117, #1E2235);">
+      <defs>
+        <linearGradient id="skyGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" style="stop-color:#1E2235;stop-opacity:1" />
+          <stop offset="100%" style="stop-color:#0F1117;stop-opacity:1" />
+        </linearGradient>
+      </defs>
+      <rect width="440" height="200" fill="url(#skyGrad)" />
+      <line x1="0" y1="190" x2="440" y2="190" stroke="#2A2D3E" stroke-width="2" />
       ${buildings}
     </svg>
   `;

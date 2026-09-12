@@ -1,10 +1,16 @@
-let currentWRDate = new Date(); // Start at today
+// weekly-review.js — Weekly productivity report, performance grades, and analytics
 
-async function renderWeeklyReview() {
+let currentWRDate = new Date();
+
+window.renderWeeklyReview = async function() {
   const container = document.getElementById('screen-weekly-review');
-  const allHabits = await getAllHabits();
-  const allLogsArray = await db.HabitLog.toArray();
-  const allMoods = await db.MoodLog.toArray();
+  if (!container) return;
+
+  const [allHabits, allLogsArray, allMoods] = await Promise.all([
+    getAllHabits(),
+    db.HabitLog.toArray(),
+    db.MoodLog.toArray()
+  ]);
   
   // Calculate week range (Mon-Sun)
   const d = new Date(currentWRDate);
@@ -14,29 +20,30 @@ async function renderWeeklyReview() {
   d.setDate(d.getDate() + 6); // Sunday
   const weekEnd = new Date(d);
   
-  const label = `${weekStart.toLocaleDateString('en-US',{month:'short',day:'numeric'})} - ${weekEnd.toLocaleDateString('en-US',{month:'short',day:'numeric'})}`;
+  const label = `${weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${weekEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
   
   // Stats for the week
   let weekXP = 0;
   let dayScores = [];
-  let habitCounts = {}; // { habit_id: completed_count }
-  let moodSum = 0; let moodCount = 0;
+  let habitCounts = {};
+  let moodSum = 0;
+  let moodCount = 0;
   
-  for (let i=0; i<7; i++) {
+  for (let i = 0; i < 7; i++) {
     const cur = new Date(weekStart);
     cur.setDate(cur.getDate() + i);
     const dStr = cur.toISOString().split('T')[0];
     
     const dLogs = allLogsArray.filter(l => l.date === dStr);
-    const dDone = dLogs.filter(l => l.completed);
+    const dDone = dLogs.filter(l => l.completed === 1);
     
-    // Add XP
+    // Sum XP
     dDone.forEach(l => {
-      weekXP += l.xp_earned;
+      weekXP += (l.xp_earned || 0);
       habitCounts[l.habit_id] = (habitCounts[l.habit_id] || 0) + 1;
     });
     
-    const pct = dLogs.length > 0 ? dDone.length / dLogs.length : 0;
+    const pct = dLogs.length > 0 ? (dDone.length / dLogs.length) : 0;
     
     const mood = allMoods.find(m => m.date === dStr);
     if (mood) {
@@ -47,105 +54,129 @@ async function renderWeeklyReview() {
     dayScores.push({
       date: cur,
       dateStr: dStr,
-      label: ['M','T','W','T','F','S','S'][i],
+      label: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][i],
       pct: pct,
       mood: mood ? mood.mood_level : null
     });
   }
   
   const activeDays = dayScores.filter(ds => ds.pct > 0 || ds.mood).length;
-  const avgPct = dayScores.reduce((acc, ds) => acc + ds.pct, 0) / (activeDays || 1);
+  const avgPct = dayScores.reduce((acc, ds) => acc + ds.pct, 0) / 7;
   const score = Math.round(avgPct * 100);
   
-  let grade = 'D'; let gColor = 'var(--danger)';
+  let grade = 'D';
+  let gColor = 'var(--danger)';
   if (score >= 90) { grade = 'A+'; gColor = 'var(--success)'; }
   else if (score >= 75) { grade = 'A'; gColor = 'var(--primary)'; }
-  else if (score >= 60) { grade = 'B'; gColor = 'var(--accent)'; }
-  else if (score >= 40) { grade = 'C'; gColor = 'var(--warning)'; }
+  else if (score >= 60) { grade = 'B'; gColor = 'var(--warning)'; }
+  else if (score >= 40) { grade = 'C'; gColor = 'var(--text-secondary)'; }
   
   // Best / Worst Habit
-  let bestHabitId = null; let bestHabitCount = -1;
-  let worstHabitId = null; let worstHabitCount = 999;
+  let bestHabitId = null;
+  let bestHabitCount = -1;
+  let worstHabitId = null;
+  let worstHabitCount = 999;
   
   Object.keys(habitCounts).forEach(id => {
     const c = habitCounts[id];
-    if (c > bestHabitCount) { bestHabitCount = c; bestHabitId = parseInt(id); }
-    if (c < worstHabitCount) { worstHabitCount = c; worstHabitId = parseInt(id); }
+    if (c > bestHabitCount) { bestHabitCount = c; bestHabitId = parseInt(id, 10); }
+    if (c < worstHabitCount) { worstHabitCount = c; worstHabitId = parseInt(id, 10); }
   });
-  // If no worst, find an active habit with 0
+  
   if (worstHabitCount === 999) worstHabitCount = 0;
   
   const bestH = allHabits.find(h => h.id == bestHabitId);
   const worstH = allHabits.find(h => h.id == worstHabitId);
   
   const avgMood = moodCount > 0 ? Math.round(moodSum / moodCount) : 0;
-  const moodLabels = {1:'Terrible', 2:'Bad', 3:'Neutral', 4:'Good', 5:'Excellent', 0:'No data'};
+  const moodLabels = { 1: 'Awful', 2: 'Bad', 3: 'Okay', 4: 'Good', 5: 'Great', 0: 'No Check-ins' };
 
   let html = `
     <div class="top-bar">
-      <button onclick="changeWRWeek(-1)" style="padding:8px;color:var(--text)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg></button>
-      <div class="top-bar-title small" style="flex:1;text-align:center">${label}</div>
-      <button onclick="changeWRWeek(1)" style="padding:8px;color:var(--text)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg></button>
-      <div class="sheet-close" style="position:relative;right:0;top:0;margin-left:8px" onclick="App.closePushScreen('screen-weekly-review')">&times;</div>
+      <div style="display:flex; align-items:center; gap:12px;">
+        <button onclick="popScreen()" style="padding:4px;" aria-label="Go Back">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <div class="top-bar-title" style="font-size:18px;">Weekly Review</div>
+      </div>
+      <div style="display:flex; gap:4px; align-items:center;">
+        <button onclick="changeWRWeek(-1)" style="padding:6px 10px; background:var(--card); border:1px solid var(--border); border-radius:8px;" aria-label="Previous Week">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <button onclick="changeWRWeek(1)" style="padding:6px 10px; background:var(--card); border:1px solid var(--border); border-radius:8px;" aria-label="Next Week">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+      </div>
     </div>
     
-    <div style="padding:16px">
-      <!-- Score Card -->
-      <div class="card" style="margin:0 0 16px;text-align:center;padding:24px 16px">
-        <div style="font-size:28px;font-weight:700;color:${gColor};margin-bottom:8px">${grade}</div>
-        <div style="font-size:40px;font-weight:700;color:var(--text);margin-bottom:8px">${score}%</div>
-        <div style="font-size:13px;color:var(--text-sub)">Great week! You earned ${weekXP} XP over 7 days.</div>
+    <div style="padding:16px;">
+      <!-- Week Range Subtitle -->
+      <div style="text-align:center; font-size:13px; font-weight:600; color:var(--text-secondary); margin-bottom:16px;">
+        ${label}
+      </div>
+
+      <!-- Score & Grade Card -->
+      <div class="card" style="margin:0 0 16px; text-align:center; padding:24px 16px;">
+        <div style="font-size:12px; font-weight:700; color:var(--text-secondary); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Consistency Grade</div>
+        <div style="font-size:44px; font-weight:800; color:${gColor}; line-height:1; margin-bottom:8px;">${grade}</div>
+        <div style="font-size:24px; font-weight:700; color:var(--text-primary); margin-bottom:6px;">${score}% Score</div>
+        <div style="font-size:13px; color:var(--text-secondary);">
+          ${weekXP > 0 ? `Earned <b style="color:var(--primary)">+${weekXP} XP</b> across ${activeDays} active days.` : 'No habit check-ins recorded for this week.'}
+        </div>
       </div>
       
       <!-- Daily Breakdown -->
-      <div class="card" style="margin:0 0 16px;padding:12px 16px">
-        <div style="font-size:15px;font-weight:600;margin-bottom:12px">Daily Breakdown</div>
-        ${dayScores.map(ds => `
-          <div class="row" style="margin-bottom:10px;font-size:13px">
-            <div style="width:30px;color:var(--text-sub)">${ds.label}</div>
-            <div style="flex:1;height:6px;background:var(--border);border-radius:3px;margin-right:12px;overflow:hidden">
-              <div style="height:100%;width:${ds.pct*100}%;background:var(--primary);border-radius:3px"></div>
+      <div class="card" style="margin:0 0 16px; padding:16px;">
+        <div style="font-size:14px; font-weight:700; color:var(--text-primary); margin-bottom:14px;">Daily Execution</div>
+        <div style="display:flex; flex-direction:column; gap:10px;">
+          ${dayScores.map(ds => `
+            <div style="display:flex; align-items:center; font-size:13px; gap:8px;">
+              <div style="width:36px; font-weight:600; color:var(--text-secondary);">${ds.label}</div>
+              <div style="flex:1; height:8px; background:var(--bg); border-radius:4px; overflow:hidden;">
+                <div style="height:100%; width:${Math.round(ds.pct * 100)}%; background:var(--primary); border-radius:4px; transition:width 0.4s ease;"></div>
+              </div>
+              <div style="width:40px; text-align:right; font-weight:600; color:var(--text-primary); font-size:12px;">${Math.round(ds.pct * 100)}%</div>
             </div>
-            <div style="width:40px;text-align:right;margin-right:12px">${Math.round(ds.pct*100)}%</div>
-            <div style="width:12px;height:12px;border-radius:6px;background:${ds.mood ? `var(--mood-${ds.mood})` : 'var(--border)'}"></div>
-          </div>
-        `).join('')}
-      </div>
-      
-      <!-- Best / Worst -->
-      <div class="row gap-8" style="margin-bottom:16px">
-        <div class="card" style="flex:1;margin:0;padding:12px;border-left:3px solid var(--success)">
-          <div style="font-size:12px;font-weight:600;color:var(--text-sub);margin-bottom:4px">Your Best Habit</div>
-          <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:4px">${bestH ? bestH.name : '-'}</div>
-          <div style="font-size:12px;color:var(--success)">${bestHabitCount}/7 days</div>
-        </div>
-        <div class="card" style="flex:1;margin:0;padding:12px;border-left:3px solid var(--warning)">
-          <div style="font-size:12px;font-weight:600;color:var(--text-sub);margin-bottom:4px">Could Do Better</div>
-          <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:4px">${worstH ? worstH.name : '-'}</div>
-          <div style="font-size:12px;color:var(--warning)">${worstHabitCount}/7 days</div>
+          `).join('')}
         </div>
       </div>
       
-      <!-- Mood & XP -->
-      <div class="row gap-8">
-        <div class="card" style="flex:1;margin:0;padding:12px;text-align:center">
-          <div style="font-size:12px;font-weight:600;color:var(--text-sub);margin-bottom:8px">Week Mood</div>
-          <div class="row" style="justify-content:center;gap:6px;margin-bottom:4px">
-            <div style="width:12px;height:12px;border-radius:6px;background:${avgMood ? `var(--mood-${avgMood})` : 'var(--border)'}"></div>
-            <div style="font-size:14px;font-weight:600">${moodLabels[avgMood]}</div>
+      <!-- Best & Needs Attention -->
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:16px;">
+        <div class="card" style="margin:0; padding:14px; border-top:3px solid var(--success);">
+          <div style="font-size:11px; font-weight:700; color:var(--text-secondary); text-transform:uppercase; margin-bottom:4px;">Top Performer</div>
+          <div style="font-size:14px; font-weight:700; color:var(--text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-bottom:4px;">
+            ${escapeHtml(bestH ? bestH.name : '—')}
           </div>
+          <div style="font-size:12px; font-weight:600; color:var(--success);">${bestHabitCount > 0 ? `${bestHabitCount} / 7 days` : '0 days'}</div>
         </div>
-        <div class="card" style="flex:1;margin:0;padding:12px;text-align:center">
-          <div style="font-size:12px;font-weight:600;color:var(--text-sub);margin-bottom:8px">XP Earned</div>
-          <div style="font-size:20px;font-weight:700;color:var(--accent)">+${weekXP}</div>
+
+        <div class="card" style="margin:0; padding:14px; border-top:3px solid var(--warning);">
+          <div style="font-size:11px; font-weight:700; color:var(--text-secondary); text-transform:uppercase; margin-bottom:4px;">Needs Focus</div>
+          <div style="font-size:14px; font-weight:700; color:var(--text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-bottom:4px;">
+            ${escapeHtml(worstH ? worstH.name : '—')}
+          </div>
+          <div style="font-size:12px; font-weight:600; color:var(--warning);">${worstHabitCount < 999 ? `${worstHabitCount} / 7 days` : '0 days'}</div>
+        </div>
+      </div>
+      
+      <!-- Mood & XP Highlights -->
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+        <div class="card" style="margin:0; padding:14px; text-align:center;">
+          <div style="font-size:11px; font-weight:700; color:var(--text-secondary); text-transform:uppercase; margin-bottom:6px;">Average Mood</div>
+          <div style="font-size:15px; font-weight:700; color:var(--text-primary);">${moodLabels[avgMood]}</div>
+        </div>
+        <div class="card" style="margin:0; padding:14px; text-align:center;">
+          <div style="font-size:11px; font-weight:700; color:var(--text-secondary); text-transform:uppercase; margin-bottom:6px;">Total Week XP</div>
+          <div style="font-size:18px; font-weight:800; color:var(--primary);">+${weekXP}</div>
         </div>
       </div>
     </div>
   `;
   container.innerHTML = html;
-}
+};
 
-function changeWRWeek(offset) {
+window.changeWRWeek = function(offset) {
   currentWRDate.setDate(currentWRDate.getDate() + (offset * 7));
-  renderWeeklyReview();
-}
+  window.renderWeeklyReview();
+};

@@ -1,15 +1,15 @@
 {
-  "name": "Progress Tracker",
-  "short_name": "Progress",
-  "description": "Offline daily habit tracker. Build streaks, track progress, grow your city.",
-  "theme_color": "#0F1117",
-  "background_color": "#0F1117",
+  "name": "HabitForge - Habit Tracking & Personal Productivity",
+  "short_name": "HabitForge",
+  "description": "Offline-first daily habit tracker. Build streaks, track productivity velocity, grow your city skyline.",
+  "theme_color": "#0C0C0E",
+  "background_color": "#0C0C0E",
   "display": "standalone",
   "orientation": "portrait-primary",
-  "start_url": "/",
-  "scope": "/",
+  "start_url": "./",
+  "scope": "./",
   "lang": "en",
-  "categories": ["productivity", "lifestyle"],
+  "categories": ["productivity", "lifestyle", "education"],
   "icons": [
     {
       "src": "icons/logo.png",

@@ -1,524 +1,357 @@
-let isAddHabitFormVisible = false;
+// home.js — Main dashboard, habit cards, real-time progress, daily quote, and check-ins
 
-async function renderHome() {
+let currentCategory = 'All';
+
+window.renderHome = async function() {
   const container = document.getElementById('screen-home');
+  if (!container) return;
+
+  const now = new Date();
   const today = todayStr();
+  const dateStr = formatFullDate(now);
+  const timeStr = formatTime(now);
+  
+  const hour = now.getHours();
+  let greeting = "Good evening";
+  if (hour < 12) greeting = "Good morning";
+  else if (hour < 18) greeting = "Good afternoon";
 
-  // ── PRELOAD DEFAULT HABITS ON FIRST LAUNCH ──
-  const allHabits = await db.Habit.toArray();
-  if (allHabits.length === 0) {
-    const defaultHabits = [
-      'Morning workout 30 min',
-      'Read 20 pages',
-      'Drink 8 glasses of water',
-      'Meditate 10 min',
-      'Learn something new 1 hr',
-      'Walk 5000 steps',
-      'Eat 3 healthy meals',
-      'Sleep 8 hours',
-      'Journal 10 min',
-      'No social media before 9am',
-      'Practice gratitude',
-      'Evening stretch'
-    ];
-    for (const name of defaultHabits) {
-      const id = await addHabit({ name, category: 'Learning', difficulty: 1 });
-      await upsertLog(id, today, 0, 0);
-    }
-  }
-
-  // ── ENSURE TODAY'S LOGS EXIST ──
-  const activeHabits = await getActiveHabits();
-  for (const h of activeHabits) {
-    const existing = await getLog(h.id, today);
-    if (!existing) await upsertLog(h.id, today, 0, 0);
-  }
-
-  // ── DAILY TASK RESET ──
-  const stats = await getUserStats();
-  if (stats.last_active_date !== today) {
-    // New day! Uncheck all tasks
-    const tasks = await db.Task.toArray();
-    if (tasks.length > 0) {
-      await db.Task.where('id').anyOf(tasks.map(t => t.id)).modify({ completed: 0 });
-    }
-    await updateUserStats({ last_active_date: today });
-  }
-
-  const allLogs = await getLogsForDate(today);
-  const totalActive = activeHabits.length;
+  const [activeHabits, allLogs, stats, streakData] = await Promise.all([
+    getActiveHabits(),
+    getLogsForDate(today),
+    getUserStats(),
+    calculateAllStreaks()
+  ]);
+  
   let doneCount = 0;
-
-  const habitsWithData = [];
-  for (const h of activeHabits) {
-    const log = allLogs.find(l => l.habit_id == h.id);
-    habitsWithData.push({ ...h, log });
-    if (log && log.completed) doneCount++;
-  }
-
-  const pct = totalActive === 0 ? 0 : Math.round((doneCount / totalActive) * 100);
-
-  let ringColor = '#F5A623';
-  if (pct >= 100) ringColor = '#34C97D';
-  else if (pct >= 50) ringColor = '#4F8EF7';
-
-  const circumference = 2 * Math.PI * 26; // ≈ 163.36
-  const offset = circumference - (pct / 100) * circumference;
-
-  const dateObj = new Date();
-  const monthYear = dateObj.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-
-  const incomplete = habitsWithData.filter(h => !h.log || !h.log.completed);
-  const complete   = habitsWithData.filter(h => h.log && h.log.completed);
-
-  const weekBars    = await getWeeklyBarsData();
-  const streakDays  = await calculateNewStreak();
-  const completionRate = totalActive > 0 ? Math.round((doneCount / totalActive) * 100) : 0;
-
-  // ── BUILD HTML ──
-  let html = `
-    <!-- Top Bar (sticky) -->
-    <div style="position:sticky;top:0;z-index:10;height:56px;padding:0 16px;display:flex;justify-content:space-between;align-items:center;background:#0F1117;border-bottom:0.5px solid #2A2D3E;">
-      <div style="font-size:16px;font-weight:500;color:#FFFFFF;">Progress Tracker</div>
-      <button
-        onclick="toggleAddHabitForm()"
-        style="border:0.5px solid #2A2D3E;border-radius:8px;padding:5px 10px;background:transparent;font-size:12px;color:#8A8FA8;cursor:pointer;-webkit-tap-highlight-color:transparent;">
-        + Add habit
-      </button>
-    </div>
-
-    <!-- Inline Add Habit Form -->
-    <div id="inline-add-habit-form" style="display:${isAddHabitFormVisible ? 'flex' : 'none'};background:#1A1D27;border:0.5px solid #4F8EF7;border-radius:12px;margin:12px 12px 0;padding:12px;flex-direction:row;gap:8px;align-items:center;">
-      <input
-        type="text"
-        id="inline-habit-input"
-        placeholder="e.g. Morning run, Read 20 pages…"
-        style="flex-grow:1;font-size:13px;background:#0F1117;border:0.5px solid #2A2D3E;border-radius:8px;padding:7px 10px;color:#FFFFFF;outline:none;"
-        onkeydown="if(event.key==='Enter')saveInlineHabit();if(event.key==='Escape')toggleAddHabitForm();"
-      />
-      <button onclick="saveInlineHabit()" style="background:#1A3A6E;color:#4F8EF7;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:500;border:none;cursor:pointer;white-space:nowrap;-webkit-tap-highlight-color:transparent;">Save</button>
-      <button onclick="toggleAddHabitForm()" style="border:0.5px solid #2A2D3E;background:transparent;border-radius:8px;padding:7px 10px;font-size:12px;color:#8A8FA8;cursor:pointer;white-space:nowrap;-webkit-tap-highlight-color:transparent;">Cancel</button>
-    </div>
-
-    <!-- Progress Ring Card -->
-    <div style="background: rgba(26, 29, 39, 0.7); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border: 0.5px solid rgba(255, 255, 255, 0.1); border-radius: 16px; margin: 12px 12px 0; padding: 14px 16px; display: flex; align-items: center; gap: 16px; box-shadow: 0 4px 24px rgba(0,0,0,0.2);">
-      <!-- Ring -->
-      <div style="position:relative;width:64px;height:64px;flex-shrink:0;">
-        <svg viewBox="0 0 64 64" width="64" height="64" style="transform:rotate(-90deg); filter: drop-shadow(0 0 4px ${ringColor}44);">
-          <circle cx="32" cy="32" r="26" fill="none" stroke="#2A2D3E" stroke-width="7"></circle>
-          <circle
-            cx="32" cy="32" r="26" fill="none"
-            stroke="${ringColor}" stroke-width="7" stroke-linecap="round"
-            stroke-dasharray="${circumference.toFixed(2)}"
-            stroke-dashoffset="${offset.toFixed(2)}"
-            style="transition:stroke-dashoffset 0.5s cubic-bezier(0.4, 0, 0.2, 1),stroke 0.3s ease;">
-          </circle>
-        </svg>
-        <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#FFFFFF; text-shadow: 0 0 10px rgba(255,255,255,0.3);">${pct}%</div>
-      </div>
-      <!-- Info -->
-      <div style="flex:1;min-width:0;">
-        <div style="font-size:15px;font-weight:600;color:#FFFFFF;">${doneCount} of ${totalActive} done</div>
-        <div style="font-size:12px;color:#8A8FA8;margin-top:2px;">${monthYear} · ${totalActive} habits</div>
-        <div style="background:rgba(15, 17, 23, 0.6); border-radius:8px; padding:6px 12px; display:inline-flex; align-items:baseline; gap:3px; margin-top:8px; border: 0.5px solid rgba(255,255,255,0.05);">
-          <span style="font-size:18px;font-weight:700;color:#FFFFFF;">${doneCount}</span>
-          <span style="font-size:13px;color:#8A8FA8;">/ ${totalActive}</span>
-          <span style="font-size:11px;color:#8A8FA8;margin-left:4px;color:#4F8EF7;">active</span>
-        </div>
-      </div>
-    </div>
-
-
-    <!-- Section Header -->
-    <div style="padding:14px 16px 6px;display:flex;justify-content:space-between;align-items:center;">
-      <div style="font-size:13px;font-weight:500;color:#8A8FA8;">Today's habits</div>
-      <button
-        onclick="toggleAddHabitForm()"
-        style="border:0.5px solid #2A2D3E;border-radius:8px;padding:5px 10px;background:transparent;font-size:12px;color:#8A8FA8;cursor:pointer;-webkit-tap-highlight-color:transparent;">
-        New
-      </button>
-    </div>
-
-    <!-- Habit List -->
-    <div style="display:flex;flex-direction:column;gap:6px;padding:0 12px;">
-  `;
-
-  incomplete.forEach(h => { html += renderNewHabitCard(h, false); });
-
-  if (complete.length > 0 && incomplete.length > 0) {
-    html += `<div style="height:1px;background:#2A2D3E;margin:2px 0;"></div>`;
-  }
-
-  complete.forEach(h => { html += renderNewHabitCard(h, true); });
-
-  html += `</div>`; // end habit list
-
-  // Tasks Section
-  const tasksHTML = await renderTasksSection();
-  html += tasksHTML;
-
-  // ── Weekly Progress ──
-  html += `
-    <div style="background:#1A1D27;border:0.5px solid #2A2D3E;border-radius:12px;margin:12px 12px 0;padding:14px 16px;">
-      <div style="font-size:13px;font-weight:500;color:#8A8FA8;margin-bottom:10px;">Weekly progress</div>
-      <div style="height:60px;display:flex;gap:6px;align-items:flex-end;">
-  `;
-
-  weekBars.forEach((w, index) => {
-    const isCurrentWeek = (index === 5);
-    const barColor = isCurrentWeek ? '#34C97D' : '#4F8EF7';
-    const barHeight = w.pct > 0 ? w.pct : 0;
-    html += `
-      <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;height:100%;">
-        <div style="font-size:9px;color:#8A8FA8;line-height:1;">${w.pct > 0 ? w.pct + '%' : ''}</div>
-        <div style="flex-grow:1;width:100%;background:#22263A;border-radius:3px;overflow:hidden;display:flex;align-items:flex-end;">
-          <div style="width:100%;border-radius:2px;height:${barHeight}%;background:${barColor};${barHeight > 0 ? 'min-height:2px;' : ''}transition:height 0.3s ease;"></div>
-        </div>
-        <div style="font-size:9px;color:#8A8FA8;line-height:1;">W${index + 1}</div>
-      </div>
-    `;
+  const habitsData = activeHabits.map(h => {
+    const log = allLogs.find(l => l.habit_id === h.id);
+    const completed = log ? log.completed : 0;
+    if (completed === 1) doneCount++;
+    return { ...h, completed };
   });
 
-  html += `</div></div>`;
+  const totalTasks = activeHabits.length;
+  const pct = totalTasks > 0 ? Math.round((doneCount / totalTasks) * 100) : 0;
+  
+  // Progress Ring Circumference
+  const circumference = 2 * Math.PI * 26;
+  const offset = circumference - (pct / 100) * circumference;
 
-  // ── Bottom Stats 2×2 ──
-  html += `
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:12px;margin:0 0 12px;">
-      <div style="background:#1A1D27;border:0.5px solid #2A2D3E;border-radius:12px;padding:12px;">
-        <div style="font-size:20px;font-weight:500;color:#FFFFFF;">${doneCount}</div>
-        <div style="font-size:11px;color:#8A8FA8;margin-top:2px;">Completed today</div>
+  // Streak
+  const streakDays = streakData.overallStreak;
+
+  // Daily Quote
+  const dailyQuote = (typeof getDailyQuote === 'function') ? getDailyQuote() : "Discipline is choosing between what you want now and what you want most.";
+
+  // Filter habits
+  let filtered = habitsData;
+  if (currentCategory !== 'All') {
+    filtered = habitsData.filter(h => h.category === currentCategory);
+  }
+  
+  const incomplete = filtered.filter(h => !h.completed);
+  const complete = filtered.filter(h => h.completed);
+
+  let html = `
+    <!-- Top Header Bar -->
+    <div class="top-bar">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <div style="width:28px; height:28px; border-radius:var(--radius-sm); background:var(--card-alt); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; color:var(--text-primary);">
+          ⚡
+        </div>
+        <div class="top-bar-title">HabitForge</div>
       </div>
-      <div style="background:#1A1D27;border:0.5px solid #2A2D3E;border-radius:12px;padding:12px;">
-        <div style="font-size:20px;font-weight:500;color:#FFFFFF;">${completionRate}%</div>
-        <div style="font-size:11px;color:#8A8FA8;margin-top:2px;">Completion rate</div>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <button onclick="openAddHabitSheet()" style="background:var(--text-primary); color:var(--bg); padding:6px 12px; border-radius:var(--radius-sm); font-size:12px; font-weight:600; display:flex; align-items:center; gap:5px; transition:opacity 0.12s;">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add Habit
+        </button>
+        <button onclick="pushScreen('settings')" style="padding:6px; color:var(--text-secondary);" aria-label="Settings">
+          <svg width="18" height="18" stroke="currentColor" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+        </button>
       </div>
-      <div style="background:#1A1D27;border:0.5px solid #2A2D3E;border-radius:12px;padding:12px;">
-        <div style="font-size:20px;font-weight:500;color:#FFFFFF;">${streakDays}</div>
-        <div style="font-size:11px;color:#8A8FA8;margin-top:2px;">Day streak</div>
+    </div>
+    
+    <!-- Greeting & Live Time Header -->
+    <div style="padding:20px 16px 12px;">
+      <div style="display:flex; justify-content:space-between; align-items:flex-end;">
+        <div>
+          <div style="font-size:20px; font-weight:700; color:var(--text-primary); letter-spacing:-0.02em;">${greeting}</div>
+          <div id="live-time-label" style="font-size:12px; font-weight:500; color:var(--text-secondary); margin-top:2px;">${dateStr} &bull; ${timeStr}</div>
+        </div>
+        <div style="background:var(--card); border:1px solid var(--border); border-radius:var(--radius-sm); padding:4px 10px; display:flex; gap:6px; align-items:center;">
+          <span style="font-size:11px; font-weight:600; color:var(--text-secondary);">Streak:</span>
+          <span style="font-size:12px; font-weight:700; color:var(--primary);">${streakDays}d</span>
+        </div>
       </div>
-      <div style="background:#1A1D27;border:0.5px solid #2A2D3E;border-radius:12px;padding:12px;">
-        <div style="font-size:20px;font-weight:500;color:#FFFFFF;">${totalActive}</div>
-        <div style="font-size:11px;color:#8A8FA8;margin-top:2px;">Total habits</div>
+    </div>
+
+    <!-- Daily Reflection Thought -->
+    <div style="padding:0 16px 14px;">
+      <div style="background:var(--card-alt); border:1px solid var(--border); border-radius:var(--radius-md); padding:12px 14px; display:flex; gap:8px; align-items:flex-start;">
+        <span style="color:var(--primary); font-size:16px; line-height:1; font-weight:700;">“</span>
+        <div style="font-size:12px; font-style:italic; color:var(--text-secondary); line-height:1.45;">${escapeHtml(dailyQuote)}</div>
       </div>
+    </div>
+
+    <!-- PWA Install Card -->
+    ${renderInstallCard()}
+
+    <!-- Category Filter Chips (Clean, Monochromatic & Purposeful) -->
+    <div style="display:flex; gap:6px; overflow-x:auto; padding:0 16px; margin-bottom:14px; scrollbar-width:none;">
+      ${['All', 'Core', 'Wellness', 'Learning', 'Productivity'].map(c => {
+        const isSel = c === currentCategory;
+        return `
+          <button type="button" onclick="setCategory('${c}')" 
+            style="background:${isSel ? 'var(--text-primary)' : 'var(--card)'}; color:${isSel ? 'var(--bg)' : 'var(--text-secondary)'}; border:1px solid ${isSel ? 'var(--text-primary)' : 'var(--border)'}; padding:5px 12px; border-radius:var(--radius-sm); font-size:12px; font-weight:${isSel ? '600' : '500'}; white-space:nowrap; cursor:pointer; transition:all 0.12s ease;">
+            ${c}
+          </button>
+        `;
+      }).join('')}
+    </div>
+
+    <!-- Progress Overview Card -->
+    <div class="card" style="display:flex; align-items:center; gap:16px; cursor:pointer; margin-bottom:14px;" onclick="switchTab('stats')">
+      <div style="position:relative; width:56px; height:56px; flex-shrink:0;">
+        <svg viewBox="0 0 64 64" width="56" height="56" style="transform:rotate(-90deg);">
+          <circle cx="32" cy="32" r="26" fill="none" stroke="var(--border)" stroke-width="5"></circle>
+          <circle cx="32" cy="32" r="26" fill="none" stroke="var(--primary)" stroke-width="5" stroke-linecap="round" stroke-dasharray="${circumference.toFixed(2)}" stroke-dashoffset="${offset.toFixed(2)}" style="transition:stroke-dashoffset 0.4s ease-in-out;"></circle>
+        </svg>
+        <div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; color:var(--text-primary);">${pct}%</div>
+      </div>
+      <div style="flex:1;">
+        <div style="font-size:14px; font-weight:600; color:var(--text-primary);">${doneCount} of ${totalTasks} completed</div>
+        <div style="font-size:12px; color:var(--text-secondary); margin-top:2px;">
+          ${totalTasks - doneCount === 0 ? 'All habits finished for today' : `${totalTasks - doneCount} remaining`}
+        </div>
+      </div>
+      <div style="color:var(--text-muted); font-size:12px; font-weight:600;">View Stats &rarr;</div>
+    </div>
+
+    <!-- Mood Check-in -->
+    <div id="mood-section" style="padding:0 16px 14px;">
+      ${await renderMoodCard()}
+    </div>
+
+    <!-- Section Header -->
+    <div style="padding:0 16px 8px; display:flex; justify-content:space-between; align-items:center;">
+      <div style="font-size:12px; font-weight:700; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.04em;">
+        Today's Schedule (${filtered.length})
+      </div>
+      <div style="font-size:11px; font-weight:600; color:var(--text-muted);">${pct}% complete</div>
+    </div>
+    
+    <!-- Habit List -->
+    <div style="display:flex; flex-direction:column; padding-bottom:80px;">
+      ${filtered.length === 0 ? `
+        <div class="card" style="text-align:center; padding:32px 16px;">
+          <div style="font-size:13px; font-weight:600; color:var(--text-primary); margin-bottom:4px;">No habits in ${escapeHtml(currentCategory)}</div>
+          <div style="font-size:12px; color:var(--text-secondary); margin-bottom:14px;">Add a habit to start tracking this category.</div>
+          <button onclick="openAddHabitSheet()" style="padding:7px 14px; background:var(--text-primary); color:var(--bg); border-radius:var(--radius-sm); font-size:12px; font-weight:600;">+ Create Habit</button>
+        </div>
+      ` : `
+        ${incomplete.map(h => renderHabitCard(h, streakData.habitStreaks[h.id] || 0)).join('')}
+        ${(complete.length > 0 && incomplete.length > 0) ? `<div style="height:1px; background:var(--border-subtle); margin:4px 16px 8px;"></div>` : ''}
+        ${complete.map(h => renderHabitCard(h, streakData.habitStreaks[h.id] || 0)).join('')}
+      `}
     </div>
   `;
 
   container.innerHTML = html;
+};
 
-  if (isAddHabitFormVisible) {
-    const input = document.getElementById('inline-habit-input');
-    if (input) {
-      input.focus();
-      // On mobile, scroll to show the form
-      input.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }
-  }
-}
+window.setCategory = function(c) {
+  currentCategory = c;
+  window.renderHome();
+};
 
-// ── TASK LOGIC ──
-async function renderTasksSection() {
-  const tasks = await getAllTasks();
-  // Reset if over limit
-  await resetTasksIfLimit();
-
-  const taskCards = tasks.map(t => renderTaskCard(t, t.completed)).join('');
-
-  const addTaskFormHTML = `
-    <div class="add-task-form" style="background:#1A1D27;border:0.5px solid #4F8EF7;border-radius:12px;margin:0 12px;padding:12px;display:${isAddTaskFormVisible ? 'flex' : 'none'};gap:8px;align-items:center;">
-      <input id="new-task-input" type="text" placeholder="e.g. Read a book, 30‑min walk…" style="flex-grow:1;font-size:13px;background:#0F1117;border:0.5px solid #2A2D3E;border-radius:8px;padding:7px 10px;color:#FFFFFF;" onkeydown="if(event.key==='Enter'){saveNewTask();}" />
-      <button onclick="saveNewTask()" style="background:#1A3A6E;color:#4F8EF7;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:500;">Save</button>
-      <button onclick="toggleAddTaskForm()" style="border:0.5px solid #2A2D3E;background:transparent;border-radius:8px;padding:7px 10px;font-size:12px;color:#8A8FA8;">Cancel</button>
-    </div>`;
-
-  const tasksHTML = `
-    <div class="section-header" style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px 6px;">
-      <div style="font-size:13px;font-weight:600;color:#8A8FA8;display:flex;align-items:center;gap:6px;">
-        Tasks
-        ${tasks.some(t => !t.completed) ? `<span style="width:6px;height:6px;border-radius:50%;background:#F5A623;box-shadow:0 0 8px #F5A623;animation:pulse 2s infinite;"></span>` : ''}
-      </div>
-      <button onclick="toggleAddTaskForm()" style="border:0.5px solid #2A2D3E;background:transparent;border-radius:8px;padding:5px 10px;font-size:12px;color:#8A8FA8;cursor:pointer;">+ Add task</button>
-    </div>
-    <style>
-      @keyframes pulse {
-        0% { opacity: 0.4; transform: scale(0.8); }
-        50% { opacity: 1; transform: scale(1.2); }
-        100% { opacity: 0.4; transform: scale(0.8); }
-      }
-    </style>
-
-    ${addTaskFormHTML}
-    <div class="tasks-list" style="display:flex;flex-direction:column;gap:6px;padding:0 12px;">
-      ${taskCards}
-    </div>`;
-
-  return tasksHTML;
-}
-
-  const bg = isComplete ? 'background: linear-gradient(135deg, #1A1D27 0%, #1a2c3a 100%);' : 'background:#1A1D27;';
-  const border = isComplete ? 'border: 0.5px solid #34C97D;' : 'border: 0.5px solid #2A2D3E;';
+function renderHabitCard(h, habitStreak = 0) {
+  const isC = h.completed === 1;
+  const cardClass = isC ? 'habit-card completed' : 'habit-card';
+  const xp = (h.difficulty || 1) * 10;
 
   return `
-    <div style="${bg}${border}border-radius:12px;padding:11px 12px;display:flex;align-items:center;gap:10px;opacity:${isComplete ? '0.85' : '1'};transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);transform: ${isComplete ? 'scale(0.98)' : 'scale(1)'};">
-        <div onclick="toggleTaskUI(${t.id},${isComplete ? 1 : 0})"
-             style="min-width:44px;min-height:44px;display:flex;align-items:center;justify-content:center;cursor:pointer;-webkit-tap-highlight-color:transparent;">
-        <div style="width:20px;height:20px;border-radius:6px;display:flex;align-items:center;justify-content:center;transition:all 0.2s;${cbStyle}">
-          ${svgCheck}
+    <div class="${cardClass}" id="habit-card-${h.id}">
+      <div class="habit-cb" onclick="toggleHabit(${h.id}, ${isC})" aria-label="Toggle ${escapeHtml(h.name)}">
+        <svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+      </div>
+      <div class="habit-content" onclick="pushScreen('habit-detail', ${h.id})" style="cursor:pointer;">
+        <div class="habit-name">${escapeHtml(h.name)}</div>
+        <div class="habit-sub">
+          <span>${escapeHtml(h.category)}</span>
+          ${h.reminder_time ? `<span>&bull; ${h.reminder_time}</span>` : ''}
+          <span style="color:var(--text-muted);">&bull; +${xp} XP</span>
         </div>
       </div>
-      <div style="flex-grow:1;min-width:0;">
-        <div style="font-size:13px;font-weight:500;color:${isComplete ? '#34C97D' : '#FFFFFF'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition: color 0.2s;">${t.name}</div>
-        <div style="font-size:11px;color:#8A8FA8;margin-top:2px;">${statusText}</div>
+      <div style="display:flex; align-items:center; gap:4px; font-size:11px; font-weight:600; color:var(--text-muted); flex-shrink:0;">
+        <span>${habitStreak}d</span>
       </div>
-        <div onclick="deleteTaskUI(${t.id})"
-             style="min-width:44px;min-height:44px;display:flex;align-items:center;justify-content:center;cursor:pointer;opacity:0.4;color:#8A8FA8;-webkit-tap-highlight-color:transparent;"
-             onmouseover="this.style.opacity='1';this.style.color='#F75A5A';"
-             onmouseout="this.style.opacity='0.4';this.style.color='#8A8FA8';">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-      </div>
-    </div>`;
-}
-
-let isAddTaskFormVisible = false;
-function toggleAddTaskForm() { isAddTaskFormVisible = !isAddTaskFormVisible; renderHome(); }
-async function saveNewTask() {
-  const input = document.getElementById('new-task-input');
-  const name = input.value.trim();
-  if (!name) return;
-  await addTask(name);
-  input.value = '';
-  await renderHome();
-  // Snackbar
-  showSnackbar('Task added!', 2000);
-
-}
-async function toggleTaskUI(id, currentlyDone) {
-  // Play sound
-  playToggleSound();
-  // Call DB toggleTask
-  await toggleTask(id, currentlyDone);
-  await resetTasksIfLimit();
-  await renderHome();
-}
-
-async function deleteTaskUI(id) {
-  await deleteTask(id);
-  await renderHome();
-}
-
-
-// Simple toggle sound using Web Audio API
-function playToggleSound() {
-  try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const now = ctx.currentTime;
-    
-    // Fundamental note
-    const osc1 = ctx.createOscillator();
-    const gain1 = ctx.createGain();
-    osc1.type = 'sine';
-    osc1.frequency.setValueAtTime(523.25, now); // C5
-    osc1.frequency.exponentialRampToValueAtTime(1046.5, now + 0.1); // C6
-    
-    gain1.gain.setValueAtTime(0.1, now);
-    gain1.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
-    
-    osc1.connect(gain1);
-    gain1.connect(ctx.destination);
-    
-    // Higher harmonic chime
-    const osc2 = ctx.createOscillator();
-    const gain2 = ctx.createGain();
-    osc2.type = 'triangle';
-    osc2.frequency.setValueAtTime(1567.98, now); // G6
-    
-    gain2.gain.setValueAtTime(0.05, now);
-    gain2.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
-    
-    osc2.connect(gain2);
-    gain2.connect(ctx.destination);
-    
-    osc1.start(now);
-    osc2.start(now);
-    osc1.stop(now + 0.15);
-    osc2.stop(now + 0.15);
-  } catch(e) { console.warn('Audio play failed', e); }
-}
-
-function renderNewHabitCard(h, isComplete) {
-  const cbStyle = isComplete
-    ? 'background:#34C97D;border:1.5px solid #34C97D;box-shadow: 0 0 8px rgba(52, 201, 125, 0.4);'
-    : 'background:transparent;border:1.5px solid #2A2D3E;';
-  const svgCheck = isComplete
-    ? `<svg viewBox="0 0 24 24" width="14" height="14"><polyline points="20 6 9 17 4 12" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></polyline></svg>`
-    : '';
-  const statusText  = isComplete ? 'Completed today' : 'Pending';
-  const cardOpacity = isComplete ? '0.85' : '1';
-  const leftBorder  = isComplete ? '3px solid #34C97D' : '0.5px solid #2A2D3E';
-  const bg = isComplete ? 'background: linear-gradient(135deg, #1A1D27 0%, #1a3a2a 100%);' : 'background:#1A1D27;';
-
-  return `
-    <div style="${bg}border:0.5px solid #2A2D3E;border-left:${leftBorder};border-radius:12px;padding:11px 12px;display:flex;align-items:center;gap:10px;opacity:${cardOpacity};transition: all 0.25s ease;transform: ${isComplete ? 'scale(0.98)' : 'scale(1)'};">
-
-      <!-- Checkbox (44×44 tap target) -->
-      <div
-        onclick="toggleNewHabit(${h.id},${isComplete ? 1 : 0})"
-        ontouchstart="this.firstElementChild.style.transform='scale(0.85)'"
-        ontouchend="this.firstElementChild.style.transform='scale(1.0)'"
-        onmousedown="this.firstElementChild.style.transform='scale(0.85)'"
-        onmouseup="this.firstElementChild.style.transform='scale(1.0)'"
-        onmouseleave="this.firstElementChild.style.transform='scale(1.0)'"
-        style="min-width:44px;min-height:44px;display:flex;align-items:center;justify-content:center;cursor:pointer;-webkit-tap-highlight-color:transparent;">
-        <div style="width:20px;height:20px;border-radius:6px;display:flex;align-items:center;justify-content:center;transition:all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);${cbStyle}">
-          ${svgCheck}
-        </div>
-      </div>
-
-      <!-- Name + Status -->
-      <div style="flex-grow:1;min-width:0;">
-        <div style="font-size:13px;font-weight:600;color:${isComplete ? '#34C97D' : '#FFFFFF'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition: color 0.2s;">${h.name}</div>
-        <div style="font-size:11px;color:#8A8FA8;margin-top:2px;">${statusText}</div>
-      </div>
-
-      <!-- Delete Button (44×44 tap target wrapper) -->
-      <div
-        onclick="deleteNewHabit(${h.id})"
-        style="min-width:44px;min-height:44px;display:flex;align-items:center;justify-content:center;cursor:pointer;-webkit-tap-highlight-color:transparent;">
-        <div style="opacity:0.4;color:#8A8FA8;border-radius:4px;padding:3px;display:flex;align-items:center;justify-content:center;transition:all 0.15s;"
-             onmouseover="this.style.opacity='1';this.style.color='#F75A5A';this.style.background='rgba(247, 90, 90, 0.1)';"
-             onmouseout="this.style.opacity='0.4';this.style.color='#8A8FA8';this.style.background='transparent';">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="18" y1="6" x2="6" y2="18"></line>
-            <line x1="6" y1="6" x2="18" y2="18"></line>
-          </svg>
-        </div>
-      </div>
-
     </div>
   `;
 }
 
-// ── FORM TOGGLE ──
-function toggleAddHabitForm() {
-  isAddHabitFormVisible = !isAddHabitFormVisible;
-  renderHome();
-}
-
-// ── SAVE INLINE HABIT ──
-async function saveInlineHabit() {
-  const input = document.getElementById('inline-habit-input');
-  if (!input) return;
-  const val = input.value.trim();
-  if (val === '') return;
-
-  const id = await addHabit({ name: val, category: 'Learning', difficulty: 1 });
-  await upsertLog(id, todayStr(), 0, 0);
-
-  isAddHabitFormVisible = false;
-  showSnackbar('Habit added!', 2000);
-  await renderHome();
-}
-
-// ── TOGGLE HABIT ──
-async function toggleNewHabit(habitId, currentlyDone) {
-  const habit  = await db.Habit.get(habitId);
-  const today  = todayStr();
-  const xp     = habit.difficulty * 10;
-
-  if (currentlyDone) {
-    await upsertLog(habitId, today, 0, 0);
+window.toggleHabit = async function(id, isCompleted) {
+  const habit = await db.Habit.get(id);
+  if (!habit) return;
+  const today = todayStr();
+  const xp = (habit.difficulty || 1) * 10;
+  
+  if (isCompleted) {
+    playHapticSound('uncheck');
+    await upsertHabitLog(id, today, 0, 0);
     const stats = await getUserStats();
     await updateUserStats({ total_xp: Math.max(0, stats.total_xp - xp) });
   } else {
-    await upsertLog(habitId, today, 1, xp);
+    playHapticSound('check');
+    await upsertHabitLog(id, today, 1, xp);
     const stats = await getUserStats();
     await updateUserStats({ total_xp: stats.total_xp + xp });
-
+    
     const newStats = await getUserStats();
     const newLevel = calculateLevel(newStats.total_xp);
-    if (newLevel.level !== newStats.current_level) {
+    if (newLevel.level > newStats.current_level) {
       await updateUserStats({ current_level: newLevel.level });
+      showSnackbar(`Level ${newLevel.level}: ${newLevel.name}`);
+      playHapticSound('celebrate');
     }
-  }
-
-  await checkAllComplete();
-  await renderHome();
-}
-
-// ── DELETE HABIT ──
-async function deleteNewHabit(habitId) {
-  await archiveHabit(habitId);
-  await renderHome();
-}
-
-// ── WEEKLY BARS DATA ──
-async function getWeeklyBarsData() {
-  const now          = new Date();
-  const currentMonth = now.getMonth();
-  const currentYear  = now.getFullYear();
-
-  const allLogs  = await db.HabitLog.toArray();
-  const monthLogs = allLogs.filter(l => {
-    if (!l.date) return false;
-    const [y, m] = l.date.split('-').map(Number);
-    return y === currentYear && (m - 1) === currentMonth;
-  });
-
-  const weeks = Array.from({ length: 6 }, () => ({ done: 0, total: 0 }));
-
-  monthLogs.forEach(l => {
-    const day    = parseInt(l.date.split('-')[2], 10);
-    const wIndex = Math.min(Math.floor((day - 1) / 7), 5);
-    weeks[wIndex].total++;
-    if (l.completed) weeks[wIndex].done++;
-  });
-
-  const hasData = weeks.some(w => w.total > 0);
-  if (!hasData) {
-    return [0, 0, 20, 17, 27, 8].map(pct => ({ pct }));
-  }
-
-  return weeks.map(w => ({
-    pct: w.total === 0 ? 0 : Math.round((w.done / w.total) * 100)
-  }));
-}
-
-// ── STREAK CALCULATION ──
-async function calculateNewStreak() {
-  const activeHabits = await getActiveHabits();
-  if (activeHabits.length === 0) return 0;
-
-  let streak  = 0;
-  let cursor  = new Date();
-  const todayS = todayStr();
-
-  // Safety cap: max 365 days back
-  for (let i = 0; i < 365; i++) {
-    const yr  = cursor.getFullYear();
-    const mo  = String(cursor.getMonth() + 1).padStart(2, '0');
-    const dy  = String(cursor.getDate()).padStart(2, '0');
-    const dStr = `${yr}-${mo}-${dy}`;
-
-    const dayLogs = await getLogsForDate(dStr);
-
-    let allDone = true;
-    for (const h of activeHabits) {
-      const log = dayLogs.find(l => l.habit_id == h.id);
-      if (!log || log.completed !== 1) { allDone = false; break; }
-    }
-
-    if (dStr === todayS) {
-      // Today counts only if all done, then keep going back
-      if (allDone) streak++;
-      cursor.setDate(cursor.getDate() - 1);
-    } else {
-      if (allDone) {
-        streak++;
-        cursor.setDate(cursor.getDate() - 1);
-      } else {
-        break;
+    
+    // Check 100% completion
+    const [active, logs] = await Promise.all([
+      getActiveHabits(),
+      getLogsForDate(today)
+    ]);
+    const doneCount = active.filter(h => {
+      const l = logs.find(log => log.habit_id === h.id);
+      return l && l.completed === 1;
+    }).length;
+    
+    if (doneCount >= active.length && newStats.city_days_logged_today === 0) {
+      if (typeof triggerCelebration === 'function') {
+        triggerCelebration();
       }
     }
   }
+  
+  await window.renderHome();
+  if (window.renderDesktopRightPanel) window.renderDesktopRightPanel();
+};
 
-  return streak;
+function renderInstallCard() {
+  const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
+  const isInstalled = localStorage.getItem('pt_installed') === '1';
+  
+  if (isStandalone || isInstalled) return '';
+
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  let btnText = "Install";
+  if (isIOS) btnText = "Instructions";
+
+  return `
+    <div class="card" style="margin-bottom:14px; padding:12px 14px;">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <div style="font-size:13px; font-weight:600; color:var(--text-primary);">Install Offline App</div>
+          <div style="font-size:11px; color:var(--text-secondary);">Run locally without network</div>
+        </div>
+        <button onclick="handleInstallClick()" style="padding:6px 12px; background:var(--card-alt); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--text-primary); font-size:12px; font-weight:600;">
+          ${btnText}
+        </button>
+      </div>
+    </div>
+  `;
 }
+
+window.handleInstallClick = async function() {
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  
+  if (isIOS) {
+    showIOSInstructions();
+  } else if (deferredPrompt) {
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      localStorage.setItem('pt_installed', '1');
+      window.renderHome();
+    }
+    deferredPrompt = null;
+  } else {
+    alert("To install: Tap your browser's menu and select 'Add to Home Screen'.");
+  }
+};
+
+function showIOSInstructions() {
+  const sheet = document.getElementById('day-detail-sheet');
+  if (!sheet) return;
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <div class="sheet-header">
+      <div class="top-bar-title">Install on iOS</div>
+      <button class="sheet-close" onclick="closeAllSheets()">&times;</button>
+    </div>
+    <div style="padding:20px; color:var(--text-primary);">
+      <div style="font-size:13px; margin-bottom:12px; color:var(--text-secondary);">1. Tap <b>Share</b> in Safari (square with up arrow).</div>
+      <div style="font-size:13px; margin-bottom:12px; color:var(--text-secondary);">2. Scroll and tap <b>Add to Home Screen</b>.</div>
+      <div style="font-size:13px; margin-bottom:20px; color:var(--text-secondary);">3. Tap <b>Add</b> in the top-right corner.</div>
+      <button onclick="closeAllSheets()" style="width:100%; height:40px; background:var(--text-primary); border-radius:var(--radius-sm); color:var(--bg); font-size:13px; font-weight:600;">Close</button>
+    </div>
+  `;
+  openSheet('day-detail-sheet');
+}
+
+async function renderMoodCard() {
+  const today = todayStr();
+  const mood = await getMoodForDate(today);
+  
+  if (mood) {
+    const emojis = ['😫', '😕', '😐', '🙂', '🤩'];
+    const names = ['Low', 'Challenged', 'Neutral', 'Good', 'Peak'];
+    return `
+      <div class="card" style="margin:0; padding:12px 14px; display:flex; align-items:center; justify-content:space-between;">
+        <div>
+          <div style="font-size:12px; font-weight:600; color:var(--text-primary);">Mood: ${names[mood.mood_level - 1]}</div>
+          <div style="font-size:11px; color:var(--text-secondary); margin-top:2px;">Check-in logged ${mood.note ? `&bull; ${escapeHtml(mood.note)}` : ''}</div>
+        </div>
+        <div style="font-size:20px;">${emojis[mood.mood_level - 1]}</div>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="card" style="margin:0; padding:12px 14px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+        <span style="font-size:11px; font-weight:600; color:var(--text-secondary); text-transform:uppercase;">Daily check-in</span>
+        <span style="font-size:11px; color:var(--text-muted);">How do you feel?</span>
+      </div>
+      <div style="display:flex; justify-content:space-between; gap:4px;">
+        ${[1, 2, 3, 4, 5].map(i => {
+          const emojis = ['😫', '😕', '😐', '🙂', '🤩'];
+          return `<button type="button" onclick="logMood(${i})" style="font-size:20px; padding:4px 8px; border-radius:var(--radius-sm); background:var(--card-alt); transition:background 0.12s;" onmouseover="this.style.background='var(--border)'" onmouseout="this.style.background='var(--card-alt)'">${emojis[i-1]}</button>`;
+        }).join('')}
+      </div>
+    </div>
+  `;
+}
+
+window.logMood = async function(level) {
+  const today = todayStr();
+  await saveMood(today, level);
+  playHapticSound('check');
+  showSnackbar("Mood logged");
+  window.renderHome();
+  if (window.renderDesktopRightPanel) window.renderDesktopRightPanel();
+};
+
+// Live Clock Update
+setInterval(() => {
+  const homeScreen = document.getElementById('screen-home');
+  if (homeScreen && homeScreen.classList.contains('active')) {
+    const timeLabel = document.getElementById('live-time-label');
+    if (timeLabel) {
+      const now = new Date();
+      timeLabel.innerText = `${formatFullDate(now)} • ${formatTime(now)}`;
+    }
+  }
+}, 60000);

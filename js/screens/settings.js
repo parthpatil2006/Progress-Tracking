@@ -1,65 +1,92 @@
-async function renderSettings() {
+// settings.js — App preferences, sound effects, reminders, and data backup/restore
+
+window.renderSettings = async function() {
   const container = document.getElementById('screen-settings');
+  if (!container) return;
   
-  // Fetch current notification permission if supported
+  // Notification status
   const perm = ('Notification' in window) ? Notification.permission : 'unsupported';
   let notifStatus = 'Disabled';
-  let notifAction = `<button class="btn-sm" onclick="requestNotificationPermission()">Enable</button>`;
+  let notifAction = `<button class="btn-sm" onclick="requestNotificationPermission()" style="background:var(--primary); color:#FFF; border-radius:8px; padding:6px 12px; font-size:12px; font-weight:600;">Enable</button>`;
   if (perm === 'granted') {
-    notifStatus = '<span class="text-success">Granted</span>';
+    notifStatus = '<span style="color:var(--success); font-weight:600;">Granted</span>';
     notifAction = '';
   } else if (perm === 'unsupported') {
     notifStatus = 'Not supported';
     notifAction = '';
   }
 
-  // Local storage for settings
+  // Local settings
   const defaultReminder = localStorage.getItem('pt_default_reminder') || '09:00';
   const dailySummary = localStorage.getItem('pt_daily_summary') === 'true';
   const streakAlerts = localStorage.getItem('pt_streak_alerts') === 'true';
+  const soundEnabled = localStorage.getItem('pt_sound') !== 'false';
 
   let html = `
     <div class="top-bar">
-      <div class="top-bar-title">Settings</div>
-      <div class="sheet-close" style="position:relative;right:0;top:0" onclick="App.closePushScreen('screen-settings')">&times;</div>
+      <div style="display:flex; align-items:center; gap:12px;">
+        <button onclick="popScreen()" style="padding:4px;" aria-label="Go Back">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <div class="top-bar-title" style="font-size:18px;">Settings &amp; Backup</div>
+      </div>
     </div>
-    <div style="padding:16px 0">
+
+    <div style="padding:16px 0 60px;">
+      <!-- Preferences -->
+      <div class="form-label" style="padding:0 16px;">Preferences</div>
       
-      <div class="form-label" style="padding:0 16px">Preferences</div>
-      <div class="card row space-between">
+      <div class="card" style="display:flex; justify-content:space-between; align-items:center;">
         <div>
-          <div style="font-size:15px">Light Mode</div>
-          <div style="font-size:12px;color:var(--text-sub)">Toggle theme</div>
+          <div style="font-size:15px; font-weight:600; color:var(--text-primary);">Light Mode</div>
+          <div style="font-size:12px; color:var(--text-secondary);">Toggle high-contrast daylight theme</div>
         </div>
         <div>
-          <!-- Toggle -->
           <label class="toggle">
             <input type="checkbox" id="theme-toggle" ${document.body.classList.contains('light-mode') ? 'checked' : ''} onchange="toggleTheme(this.checked)">
             <span class="toggle-slider"></span>
           </label>
         </div>
       </div>
-      <div class="card row space-between">
+
+      <div class="card" style="display:flex; justify-content:space-between; align-items:center;">
         <div>
-          <div style="font-size:15px">Notifications</div>
-          <div style="font-size:12px;color:var(--text-sub)">${notifStatus}</div>
+          <div style="font-size:15px; font-weight:600; color:var(--text-primary);">Sound Feedback</div>
+          <div style="font-size:12px; color:var(--text-secondary);">Synthesized haptic audio on habit completion</div>
+        </div>
+        <div>
+          <label class="toggle">
+            <input type="checkbox" id="sound-toggle" ${soundEnabled ? 'checked' : ''} onchange="toggleSound(this.checked)">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="card" style="display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <div style="font-size:15px; font-weight:600; color:var(--text-primary);">Push Notifications</div>
+          <div style="font-size:12px; color:var(--text-secondary);">${notifStatus}</div>
         </div>
         <div>${notifAction}</div>
       </div>
       
-      <div class="form-label" style="padding:0 16px;margin-top:24px">Notification Settings</div>
-      <div class="card row space-between">
+      <!-- Notification Settings -->
+      <div class="form-label" style="padding:0 16px; margin-top:24px;">Reminders</div>
+      
+      <div class="card" style="display:flex; justify-content:space-between; align-items:center;">
         <div>
-          <div style="font-size:15px">Default Reminder Time</div>
+          <div style="font-size:15px; font-weight:600; color:var(--text-primary);">Default Reminder Time</div>
+          <div style="font-size:12px; color:var(--text-secondary);">Morning prompt schedule</div>
         </div>
         <div>
-          <input type="time" class="form-input" style="height:36px;width:110px" value="${defaultReminder}" onchange="localStorage.setItem('pt_default_reminder', this.value)">
+          <input type="time" class="form-input" style="height:36px; width:110px;" value="${defaultReminder}" onchange="localStorage.setItem('pt_default_reminder', this.value)">
         </div>
       </div>
-      <div class="card row space-between">
+
+      <div class="card" style="display:flex; justify-content:space-between; align-items:center;">
         <div>
-          <div style="font-size:15px">Daily Summary</div>
-          <div style="font-size:12px;color:var(--text-sub)">9 PM summary</div>
+          <div style="font-size:15px; font-weight:600; color:var(--text-primary);">Daily Evening Review</div>
+          <div style="font-size:12px; color:var(--text-secondary);">9:00 PM summary check-in</div>
         </div>
         <div>
           <label class="toggle">
@@ -68,10 +95,11 @@ async function renderSettings() {
           </label>
         </div>
       </div>
-      <div class="card row space-between">
+
+      <div class="card" style="display:flex; justify-content:space-between; align-items:center;">
         <div>
-          <div style="font-size:15px">Streak Alerts</div>
-          <div style="font-size:12px;color:var(--text-sub)">8 PM warning</div>
+          <div style="font-size:15px; font-weight:600; color:var(--text-primary);">Streak Danger Alert</div>
+          <div style="font-size:12px; color:var(--text-secondary);">8:00 PM warning if habits are pending</div>
         </div>
         <div>
           <label class="toggle">
@@ -81,100 +109,132 @@ async function renderSettings() {
         </div>
       </div>
       
-      <div class="form-label" style="padding:0 16px;margin-top:24px">Data</div>
-      <div class="card row space-between card-hover" style="cursor:pointer" onclick="exportData()">
-        <div style="font-size:15px">Export My Data</div>
-        <div style="color:var(--text-sub)">→</div>
+      <!-- Data Management -->
+      <div class="form-label" style="padding:0 16px; margin-top:24px;">Data &amp; Portability</div>
+      
+      <div class="card card-hover" style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="exportData()">
+        <div>
+          <div style="font-size:15px; font-weight:600; color:var(--text-primary);">Export Data Backup (JSON)</div>
+          <div style="font-size:12px; color:var(--text-secondary);">Download complete offline backup file</div>
+        </div>
+        <div style="color:var(--text-secondary); font-size:18px;">&rarr;</div>
       </div>
-      <div class="card row space-between card-hover" style="cursor:pointer" onclick="document.getElementById('import-file').click()">
-        <div style="font-size:15px">Import Data</div>
-        <div style="color:var(--text-sub)">→</div>
+
+      <div class="card card-hover" style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="document.getElementById('import-file').click()">
+        <div>
+          <div style="font-size:15px; font-weight:600; color:var(--text-primary);">Import Data Backup</div>
+          <div style="font-size:12px; color:var(--text-secondary);">Restore your habits and history</div>
+        </div>
+        <div style="color:var(--text-secondary); font-size:18px;">&rarr;</div>
         <input type="file" id="import-file" style="display:none" accept=".json" onchange="importData(event)">
       </div>
-      <div class="card row space-between card-hover" style="cursor:pointer" onclick="showResetDialog()">
-        <div style="font-size:15px;color:var(--danger)">Reset All Data</div>
+
+      <div class="card card-hover" style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="showResetDialog()">
+        <div>
+          <div style="font-size:15px; font-weight:600; color:var(--danger);">Reset All Data</div>
+          <div style="font-size:12px; color:var(--text-secondary);">Wipe all logs and return to default habits</div>
+        </div>
+        <div style="color:var(--danger); font-size:14px; font-weight:700;">Reset</div>
       </div>
       
-      <div style="text-align:center;padding:32px 16px;color:var(--text-sub)">
-        <div style="font-size:14px;font-weight:600;margin-bottom:4px">Progress Tracker v3.0</div>
-        <div style="font-size:12px">Fully offline. All data on your device.</div>
+      <!-- App Version & Offline Badge -->
+      <div style="text-align:center; padding:32px 16px 16px; color:var(--text-secondary);">
+        <div style="display:inline-flex; align-items:center; gap:6px; background:var(--success-subtle); color:var(--success); border:1px solid rgba(34,197,94,0.25); padding:4px 12px; border-radius:var(--radius-sm); font-size:11px; font-weight:700; margin-bottom:10px;">
+          <span style="width:6px; height:6px; border-radius:50%; background:var(--success);"></span>
+          100% Client-Side &amp; Offline Ready
+        </div>
+        <div style="font-size:14px; font-weight:700; color:var(--text-primary); margin-bottom:4px;">HabitForge v4.0</div>
+        <div style="font-size:12px;">Engineered for Tech Zephyr 4.0 Hackathon</div>
       </div>
     </div>
   `;
   
-  // Setup toggle styles
-  const style = document.createElement('style');
-  style.innerHTML = `
-    .btn-sm { padding:6px 12px; border-radius:6px; background:var(--primary); color:#fff; font-size:12px; font-weight:600; }
-    .toggle { position:relative; width:48px; height:28px; display:inline-block; }
-    .toggle input { opacity:0; width:0; height:0; }
-    .toggle-slider { position:absolute; inset:0; background:var(--border); border-radius:14px; cursor:pointer; transition:background 0.2s; }
-    .toggle-slider::after { content:''; position:absolute; left:3px; top:3px; width:22px; height:22px; background:#fff; border-radius:11px; transition:transform 0.2s; }
-    .toggle input:checked + .toggle-slider { background:var(--primary); }
-    .toggle input:checked + .toggle-slider::after { transform:translateX(20px); }
-  `;
-  container.appendChild(style);
+  // Dialog setup
+  const resetDialog = document.getElementById('reset-dialog');
+  if (resetDialog) {
+    resetDialog.innerHTML = `
+      <div style="font-size:18px; font-weight:700; color:var(--text-primary); margin-bottom:12px;">Reset All Habits &amp; Progress?</div>
+      <div style="font-size:14px; color:var(--text-secondary); line-height:1.5; margin-bottom:24px;">
+        This will permanently clear your habit logs, notes, city progress, and custom habits. Default starter habits will be restored.
+      </div>
+      <div style="display:flex; gap:10px;">
+        <button style="flex:1; height:44px; border-radius:var(--radius-md); border:1px solid var(--border); background:var(--card-alt); color:var(--text-primary); font-weight:600;" onclick="document.getElementById('reset-dialog-overlay').classList.add('hidden')">Cancel</button>
+        <button style="flex:1; height:44px; border-radius:var(--radius-md); border:none; background:var(--danger); color:#FFF; font-weight:700;" onclick="performReset()">Reset Everything</button>
+      </div>
+    `;
+  }
   
-  // Setup dialog
-  document.getElementById('reset-dialog').innerHTML = `
-    <div class="dialog-title" style="font-size:18px;font-weight:700;margin-bottom:12px">Delete Everything?</div>
-    <div style="font-size:14px;color:var(--text-sub);line-height:1.5;margin-bottom:24px">
-      All habits, logs, mood data, notes, and your city will be permanently deleted.
-    </div>
-    <div class="row gap-8">
-      <button style="flex:1;height:44px;border-radius:10px;border:1px solid var(--border);color:var(--text)" onclick="document.getElementById('reset-dialog-overlay').classList.add('hidden')">Cancel</button>
-      <button style="flex:1;height:44px;border-radius:10px;background:var(--danger);color:#fff;font-weight:600" onclick="performReset()">Delete Everything</button>
-    </div>
-  `;
-  
-  container.innerHTML = html + container.innerHTML; // Prepend html keeping style
-}
+  container.innerHTML = html;
+};
 
-function toggleSetting(key, val) {
-  localStorage.setItem(key, val);
+window.toggleSound = function(enabled) {
+  localStorage.setItem('pt_sound', enabled ? 'true' : 'false');
+  if (enabled) playHapticSound('check');
+  showSnackbar(enabled ? 'Sound effects enabled' : 'Sound effects muted');
+};
+
+window.toggleSetting = function(key, val) {
+  localStorage.setItem(key, val ? 'true' : 'false');
   if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
     navigator.serviceWorker.controller.postMessage({ type: 'RESCHEDULE_NOTIFICATIONS' });
   }
-}
+};
 
-async function toggleTheme(isLight) {
+window.toggleTheme = async function(isLight) {
   if (isLight) {
     document.body.classList.add('light-mode');
   } else {
     document.body.classList.remove('light-mode');
   }
-  const stats = await getUserStats();
   await updateUserStats({ theme: isLight ? 'light' : 'dark' });
-}
+};
 
-async function requestNotificationPermission() {
-  if (!('Notification' in window)) return;
-  const perm = await Notification.requestPermission();
-  renderSettings();
-  if (perm === 'granted' && 'serviceWorker' in navigator && navigator.serviceWorker.controller) {
-    navigator.serviceWorker.controller.postMessage({ type: 'RESCHEDULE_NOTIFICATIONS' });
+window.requestNotificationPermission = async function() {
+  if (!('Notification' in window)) {
+    showSnackbar('Notifications are not supported in this browser.');
+    return;
   }
-}
+  const perm = await Notification.requestPermission();
+  window.renderSettings();
+  if (perm === 'granted') {
+    showSnackbar('Notifications granted!');
+    if (typeof rescheduleAllNotifications === 'function') {
+      rescheduleAllNotifications();
+    }
+  } else {
+    showSnackbar('Notifications disabled or blocked.');
+  }
+};
 
-async function exportData() {
-  const data = {
-    habits: await db.Habit.toArray(),
-    logs: await db.HabitLog.toArray(),
-    moods: await db.MoodLog.toArray(),
-    notes: await db.HabitNote.toArray(),
-    stats: await getUserStats()
-  };
-  
-  const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `progress_tracker_backup_${todayStr()}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
-}
+window.exportData = async function() {
+  try {
+    const data = {
+      habits: await db.Habit.toArray(),
+      logs: await db.HabitLog.toArray(),
+      moods: await db.MoodLog.toArray(),
+      notes: await db.HabitNote.toArray(),
+      stats: await getUserStats(),
+      version: '4.0',
+      exported_at: new Date().toISOString()
+    };
+    
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `habitforge_backup_${todayStr()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showSnackbar('Backup exported successfully!');
+  } catch (err) {
+    console.error('Export error:', err);
+    showSnackbar('Failed to export backup file.');
+  }
+};
 
-function importData(event) {
+window.importData = function(event) {
   const file = event.target.files[0];
   if (!file) return;
   
@@ -182,36 +242,44 @@ function importData(event) {
   reader.onload = async (e) => {
     try {
       const data = JSON.parse(e.target.result);
-      if (data.habits && data.logs && data.stats) {
+      if (data && data.habits && data.logs && data.stats) {
         await resetAllData();
         await db.transaction('rw', db.Habit, db.HabitLog, db.MoodLog, db.HabitNote, db.UserStats, async () => {
-          if(data.habits.length) await db.Habit.bulkAdd(data.habits);
-          if(data.logs.length) await db.HabitLog.bulkAdd(data.logs);
-          if(data.moods && data.moods.length) await db.MoodLog.bulkAdd(data.moods);
-          if(data.notes && data.notes.length) await db.HabitNote.bulkAdd(data.notes);
+          if (data.habits.length) await db.Habit.bulkAdd(data.habits);
+          if (data.logs.length) await db.HabitLog.bulkAdd(data.logs);
+          if (data.moods && data.moods.length) await db.MoodLog.bulkAdd(data.moods);
+          if (data.notes && data.notes.length) await db.HabitNote.bulkAdd(data.notes);
           await db.UserStats.put(data.stats);
         });
-        showSnackbar('Data imported successfully!');
-        window.location.reload();
+        showSnackbar('Backup imported successfully!');
+        setTimeout(() => window.location.reload(), 600);
       } else {
-        showSnackbar('Invalid backup file');
+        showSnackbar('Invalid backup file format.');
       }
     } catch(err) {
-      showSnackbar('Error parsing file');
+      console.error('Import error:', err);
+      showSnackbar('Error reading backup file.');
     }
   };
   reader.readAsText(file);
-}
+};
 
-function showResetDialog() {
-  document.getElementById('reset-dialog-overlay').classList.remove('hidden');
-}
+window.showResetDialog = function() {
+  const overlay = document.getElementById('reset-dialog-overlay');
+  if (overlay) overlay.classList.remove('hidden');
+};
 
-async function performReset() {
-  await resetAllData();
-  document.getElementById('reset-dialog-overlay').classList.add('hidden');
-  App.closePushScreen('screen-settings');
-  App.closePushScreen('screen-more'); // actually more is not a push screen, but we need to reset to home
-  await App.init();
-  showSnackbar('All data deleted');
-}
+window.performReset = async function() {
+  try {
+    await resetAllData();
+    const overlay = document.getElementById('reset-dialog-overlay');
+    if (overlay) overlay.classList.add('hidden');
+    popScreen();
+    switchTab('home');
+    showSnackbar('All data reset to initial defaults');
+    playHapticSound('check');
+  } catch (err) {
+    console.error('Reset error:', err);
+    showSnackbar('Failed to reset data.');
+  }
+};
